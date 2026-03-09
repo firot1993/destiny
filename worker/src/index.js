@@ -49,6 +49,7 @@ export default {
         apiBody = JSON.stringify({
           model: body.model || "anthropic/claude-sonnet-4-20250514",
           max_tokens: body.max_tokens || 1000,
+          temperature: body.temperature ?? 1.0,
           messages
         });
         headers = {
@@ -63,6 +64,7 @@ export default {
         apiBody = JSON.stringify({
           model: body.model || "claude-sonnet-4-20250514",
           max_tokens: body.max_tokens || 1000,
+          temperature: body.temperature ?? 1.0,
           messages: body.messages || []
         });
         headers = {
