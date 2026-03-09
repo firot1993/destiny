@@ -94,6 +94,7 @@ const translations = {
     provider_label: "PROVIDER",
     provider_anthropic: "Anthropic",
     provider_openrouter: "OpenRouter",
+    model_label: "MODEL",
 
     // Settings
     settings: "SETTINGS",
@@ -188,6 +189,7 @@ const translations = {
     provider_label: "提供商",
     provider_anthropic: "Anthropic",
     provider_openrouter: "OpenRouter",
+    model_label: "模型",
 
     settings: "设置",
     api_endpoint: "API 端点",
