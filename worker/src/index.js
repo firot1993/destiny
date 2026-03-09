@@ -78,11 +78,23 @@ export default {
         body: apiBody
       });
 
-      const data = await apiRes.json();
+      const { data, rawText } = await parseJsonResponse(apiRes);
+
+      if (!apiRes.ok) {
+        return jsonResponse({
+          error: extractUpstreamError(data) || rawText.slice(0, 300) || `Upstream API error (${apiRes.status})`
+        }, apiRes.status, env);
+      }
 
       // Normalize OpenRouter response to Anthropic format
       if (provider === "openrouter") {
-        const text = data.choices?.[0]?.message?.content || "";
+        const text = extractOpenRouterText(data);
+        if (!text) {
+          return jsonResponse({
+            error: extractUpstreamError(data) || "Upstream API returned no text content."
+          }, 502, env);
+        }
+
         return jsonResponse({
           content: [{ type: "text", text }]
         }, 200, env);
@@ -112,4 +124,41 @@ function jsonResponse(data, status, env) {
       ...corsHeaders(env)
     }
   });
+}
+
+async function parseJsonResponse(response) {
+  const rawText = await response.text();
+  if (!rawText) return { data: null, rawText: "" };
+
+  try {
+    return { data: JSON.parse(rawText), rawText };
+  } catch {
+    return { data: null, rawText };
+  }
+}
+
+function extractUpstreamError(data) {
+  if (!data) return "";
+  if (typeof data.error === "string") return data.error;
+  if (typeof data.message === "string") return data.message;
+  if (typeof data.error?.message === "string") return data.error.message;
+  return "";
+}
+
+function extractOpenRouterText(data) {
+  const content = data?.choices?.[0]?.message?.content;
+  if (typeof content === "string") return content.trim();
+
+  if (Array.isArray(content)) {
+    return content
+      .map((part) => {
+        if (typeof part === "string") return part;
+        if (part?.type === "text" && typeof part.text === "string") return part.text;
+        return "";
+      })
+      .join("\n")
+      .trim();
+  }
+
+  return "";
 }

@@ -151,6 +151,26 @@ function getStepLabel(step, totalSteps, t) {
   return t("step_refine");
 }
 
+function extractNormalizedText(contentBlocks) {
+  if (!Array.isArray(contentBlocks)) return "";
+
+  return contentBlocks
+    .flatMap((block) => {
+      if (block?.type !== "text") return [];
+      if (typeof block.text === "string") return [block.text];
+
+      if (Array.isArray(block.text)) {
+        return block.text
+          .map((part) => (typeof part?.text === "string" ? part.text : ""))
+          .filter(Boolean);
+      }
+
+      return [];
+    })
+    .join("\n")
+    .trim();
+}
+
 // ─── Components ───────────────────────────────────────────
 function StepIndicator({ currentStep, totalSteps, isGenerating }) {
   const { t } = useI18n();
@@ -247,6 +267,7 @@ export default function App() {
   const [allStepOutputs, setAllStepOutputs] = useState([]);
   const [error, setError] = useState(null);
   const abortRef = useRef(false);
+  const generationLockRef = useRef(false);
 
   const updateField = (key, val) => setFields(f => ({ ...f, [key]: val }));
   const updateBig5 = (idx, val) => setBig5(b => { const n = [...b]; n[idx] = val; return n; });
@@ -270,7 +291,15 @@ export default function App() {
 
       if (!res.ok) {
         const errText = await res.text();
-        throw new Error(`API ${res.status}: ${errText.slice(0, 200)}`);
+        let message = errText;
+        try {
+          const parsed = JSON.parse(errText);
+          message = typeof parsed.error === "string" ? parsed.error : JSON.stringify(parsed.error || parsed);
+        } catch {
+          // Leave non-JSON errors as-is.
+        }
+
+        throw new Error(`API ${res.status}: ${message.slice(0, 200)}`);
       }
 
       const data = await res.json();
@@ -281,8 +310,8 @@ export default function App() {
         throw new Error("Unexpected response: " + JSON.stringify(data).slice(0, 200));
       }
 
-      const text = data.content.filter(b => b.type === "text").map(b => b.text).join("\n");
-      if (!text) throw new Error("Empty response from API");
+      const text = extractNormalizedText(data.content);
+      if (!text) throw new Error("API returned no text content.");
       return text;
     } catch (err) {
       throw new Error(err.message || "Network error");
@@ -290,6 +319,9 @@ export default function App() {
   };
 
   const generate = async () => {
+    if (generationLockRef.current) return;
+    generationLockRef.current = true;
+
     const stateStr = buildStateString(fields, big5, t);
     setIsGenerating(true);
     setTrajectories([]);
@@ -314,9 +346,13 @@ export default function App() {
           setAllStepOutputs(prev => [...prev, stepResults]);
         }
       }
-    } catch (e) { setError(e.message); }
-    setIsGenerating(false);
-    setCurrentStep(0);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      generationLockRef.current = false;
+      setIsGenerating(false);
+      setCurrentStep(0);
+    }
   };
 
   const guidanceLabels = ["", ...Array.from({ length: 10 }, (_, i) => t(`guidance_${i + 1}`))];
