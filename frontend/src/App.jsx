@@ -40,10 +40,14 @@ function buildStateString(fields, big5, t) {
   return parts.join("\n");
 }
 
-function generateStepPrompt(step, totalSteps, state, guidance, prev) {
+function generateStepPrompt(step, totalSteps, state, guidance, prev, previousSketches = []) {
   const progress = step / (totalSteps - 1);
   const guidanceDesc = guidance >= 7 ? "dramatic pivots, unexpected breakthroughs, biography-worthy" : guidance >= 4 ? "ambitious but grounded, notable achievements" : "meaningful, well-lived, not flashy";
   const personality = "The person's Big Five personality traits should deeply shape the trajectory. High openness = unconventional pivots. High conscientiousness = systematic empire-building. High extraversion = network-driven success. Low agreeableness = disruptive moves. High neuroticism = intense creative or emotional breakthroughs.";
+
+  const variationDirective = previousSketches.length > 0
+    ? `\n\nCRITICAL: The following trajectories were ALREADY generated. You MUST produce something COMPLETELY DIFFERENT — different life domain, industry, archetype, tone, and turning-point structure. Do NOT repeat similar themes or career arcs.\n\nALREADY GENERATED:\n${previousSketches.map((sk, i) => `--- Sample ${i + 1} ---\n${sk}`).join("\n")}`
+    : "";
 
   if (step === 0) {
     return {
@@ -58,7 +62,7 @@ GUIDANCE SCALE: ${guidance}/10 (1 = plausible ordinary life, 10 = biography-wort
 IMPORTANT: ${personality}
 
 STEP 1 of ${totalSteps}: NOISY SKETCH
-Generate a very rough, noisy sketch of a possible life trajectory. Vague, fragmented — just hints. Like a diffusion model at high noise. ${totalSteps <= 3 ? "4-5" : "3-4"} short fragmented phrases. No full sentences. Signal emerging from noise.
+Generate a very rough, noisy sketch of a possible life trajectory. Vague, fragmented — just hints. Like a diffusion model at high noise. ${totalSteps <= 3 ? "4-5" : "3-4"} short fragmented phrases. No full sentences. Signal emerging from noise.${variationDirective}
 
 Respond with ONLY the trajectory sketch, nothing else.`
     };
@@ -273,7 +277,7 @@ export default function App() {
   const updateBig5 = (idx, val) => setBig5(b => { const n = [...b]; n[idx] = val; return n; });
   const hasMinInput = fields.age || fields.skills || fields.obsessions;
 
-  const callModel = async (messages) => {
+  const callModel = async (messages, temperature = 1.0) => {
     const endpoint = apiUrl.replace(/\/$/, "");
     if (!endpoint) throw new Error("API endpoint not configured. Open Settings to set your worker URL.");
 
@@ -285,6 +289,7 @@ export default function App() {
           provider: DEFAULT_PROVIDER,
           model,
           max_tokens: 1000,
+          temperature,
           messages
         })
       });
@@ -330,6 +335,7 @@ export default function App() {
     abortRef.current = false;
 
     try {
+      const previousSketches = [];
       for (let s = 0; s < numSamples; s++) {
         if (abortRef.current) break;
         setCurrentSample(s);
@@ -337,9 +343,11 @@ export default function App() {
         for (let step = 0; step < denoiseSteps; step++) {
           if (abortRef.current) break;
           setCurrentStep(step);
-          const msg = generateStepPrompt(step, denoiseSteps, stateStr, guidance, step > 0 ? stepResults[step - 1] : null);
-          const result = await callModel([msg]);
+          const msg = generateStepPrompt(step, denoiseSteps, stateStr, guidance, step > 0 ? stepResults[step - 1] : null, previousSketches);
+          const temp = Math.min(1.0 + s * 0.15, 1.6);
+          const result = await callModel([msg], temp);
           stepResults.push(result);
+          if (step === 0) previousSketches.push(result);
         }
         if (!abortRef.current) {
           setTrajectories(prev => [...prev, stepResults[stepResults.length - 1]]);
