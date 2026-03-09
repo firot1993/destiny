@@ -182,14 +182,14 @@ function TrajectoryCard({ trajectory, index, stepOutputs, totalSteps }) {
   const [showSteps, setShowSteps] = useState(false);
   const { t } = useI18n();
   return (
-    <div style={{
-      background: "rgba(255,255,255,0.018)", border: "1px solid rgba(255,255,255,0.05)",
-      borderRadius: 14, padding: 28, marginBottom: 16, position: "relative", animation: "fadeUp 0.5s ease"
+    <div className="trajectory-card" style={{
+      background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.08)",
+      borderRadius: 14, padding: 28, marginBottom: 16, position: "relative", animation: "fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1)"
     }}>
-      <div style={{ position: "absolute", top: 16, right: 20, fontSize: 10, fontFamily: "'JetBrains Mono', monospace", color: "rgba(255,170,40,0.35)", letterSpacing: 2 }}>
+      <div style={{ position: "absolute", top: 16, right: 20, fontSize: 11, fontFamily: "'JetBrains Mono', monospace", color: "rgba(255,170,40,0.6)", letterSpacing: 2, fontWeight: 600 }}>
         {t("sample_of")} {index + 1}
       </div>
-      <p className="serif" style={{ color: "rgba(255,255,255,0.82)", fontSize: 15, lineHeight: 1.85, margin: 0, paddingRight: 60 }}>{trajectory}</p>
+      <p className="serif" style={{ color: "#fff", fontSize: 16, lineHeight: 1.85, margin: 0, paddingRight: 60 }}>{trajectory}</p>
       {stepOutputs && stepOutputs.length > 0 && (
         <div style={{ marginTop: 20 }}>
           <button onClick={() => setShowSteps(!showSteps)} style={{
@@ -201,17 +201,18 @@ function TrajectoryCard({ trajectory, index, stepOutputs, totalSteps }) {
               {stepOutputs.map((step, si) => {
                 const p = si / (stepOutputs.length || 1);
                 return (
-                  <div key={si} style={{
+                  <div key={si} className="step-reveal" style={{
                     padding: "14px 18px", marginBottom: 6,
                     background: `rgba(255,170,40,${0.015 + p * 0.03})`,
                     borderLeft: `2px solid rgba(255,170,40,${0.12 + p * 0.5})`,
-                    borderRadius: "0 8px 8px 0"
+                    borderRadius: "0 8px 8px 0",
+                    animationDelay: `${si * 0.08}s`
                   }}>
-                    <div style={{ fontSize: 9, fontFamily: "'JetBrains Mono', monospace", color: `rgba(255,170,40,${0.25 + p * 0.6})`, marginBottom: 6, letterSpacing: 2 }}>
+                    <div style={{ fontSize: 10, fontFamily: "'JetBrains Mono', monospace", color: `rgba(255,170,40,${0.5 + p * 0.5})`, marginBottom: 6, letterSpacing: 2, fontWeight: 600 }}>
                       STEP {si + 1} — {getStepLabel(si, stepOutputs.length, t)}
                     </div>
                     <p style={{
-                      color: `rgba(255,255,255,${0.3 + p * 0.55})`, fontSize: 13, lineHeight: 1.7, margin: 0,
+                      color: `rgba(255,255,255,${0.6 + p * 0.4})`, fontSize: 14, lineHeight: 1.7, margin: 0,
                       fontFamily: p < 0.4 ? "'JetBrains Mono', monospace" : "'Source Serif 4', 'Noto Serif SC', Georgia, serif",
                       fontStyle: si === 0 ? "italic" : "normal"
                     }}>{step}</p>
@@ -322,14 +323,14 @@ export default function App() {
 
   const inputStyle = (type) => ({
     width: "100%", boxSizing: "border-box",
-    background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.07)",
+    background: "rgba(255,255,255,0.035)", border: "1px solid rgba(255,255,255,0.12)",
     borderRadius: 8, padding: type === "short" ? "10px 14px" : "12px 16px",
-    color: "rgba(255,255,255,0.85)", fontSize: 14,
+    color: "#fff", fontSize: 15,
     fontFamily: "'Source Serif 4', 'Noto Serif SC', Georgia, serif", lineHeight: 1.6, resize: "none"
   });
 
   const mono = { fontFamily: "'JetBrains Mono', monospace" };
-  const label = { display: "block", fontSize: 9, ...mono, color: "rgba(255,255,255,0.25)", letterSpacing: 2, marginBottom: 8 };
+  const label = { display: "block", fontSize: 10, ...mono, color: "rgba(255,255,255,0.5)", fontWeight: 500, letterSpacing: 1.5, marginBottom: 10 };
 
   return (
     <div data-lang={lang} style={{ minHeight: "100vh" }}>
@@ -374,7 +375,7 @@ export default function App() {
           <div style={{
             marginBottom: 28, padding: "20px 24px",
             background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)",
-            borderRadius: 12, animation: "fadeUp 0.3s ease"
+            borderRadius: 12, animation: "fadeUp 0.4s cubic-bezier(0.16, 1, 0.3, 1)"
           }}>
             <div style={{ fontSize: 9, ...mono, color: "rgba(255,170,40,0.4)", letterSpacing: 2, marginBottom: 16 }}>
               {t("settings")}
@@ -435,16 +436,16 @@ export default function App() {
               background: "none", border: "none",
               borderBottom: page === tab.id ? "2px solid rgba(255,170,40,0.7)" : "2px solid transparent",
               padding: "10px 16px", cursor: "pointer",
-              color: page === tab.id ? "rgba(255,170,40,0.9)" : "rgba(255,255,255,0.2)",
-              fontSize: 10, ...mono, letterSpacing: 2, transition: "all 0.3s ease"
+              color: page === tab.id ? "rgba(255,170,40,0.9)" : "rgba(255,255,255,0.45)",
+              fontSize: 11, ...mono, letterSpacing: 1.5, transition: "all 0.3s ease"
             }}>{tab.label}</button>
           ))}
         </div>
 
         {/* ─── PAGE 1: STATE ─── */}
         {page === "input" && (
-          <div style={{ animation: "fadeUp 0.4s ease" }}>
-            <p style={{ color: "rgba(255,255,255,0.3)", fontSize: 13, marginBottom: 28, lineHeight: 1.7 }}>
+          <div style={{ animation: "fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) both" }}>
+            <p style={{ color: "rgba(255,255,255,0.6)", fontSize: 14, marginBottom: 28, lineHeight: 1.7 }}>
               {t("state_desc")}
             </p>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
@@ -476,23 +477,23 @@ export default function App() {
 
         {/* ─── PAGE 2: BIG FIVE ─── */}
         {page === "big5" && (
-          <div style={{ animation: "fadeUp 0.4s ease" }}>
-            <p style={{ color: "rgba(255,255,255,0.3)", fontSize: 13, marginBottom: 32, lineHeight: 1.7 }}>
+          <div style={{ animation: "fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) both" }}>
+            <p style={{ color: "rgba(255,255,255,0.6)", fontSize: 14, marginBottom: 32, lineHeight: 1.7 }}>
               {t("big5_desc")}
             </p>
             {BIG5_KEYS.map((key, i) => (
               <div key={key} style={{
-                padding: "22px 24px", marginBottom: 12, background: "rgba(255,255,255,0.015)",
-                border: "1px solid rgba(255,255,255,0.05)", borderRadius: 12
+                padding: "22px 24px", marginBottom: 12, background: "rgba(255,255,255,0.02)",
+                border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12
               }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <span style={{ fontSize: 16, color: "rgba(255,170,40,0.6)" }}>{BIG5_ICONS[i]}</span>
-                    <span style={{ fontSize: 11, ...mono, color: "rgba(255,170,40,0.6)", letterSpacing: 1 }}>{t(key)}</span>
+                    <span style={{ fontSize: 16, color: "rgba(255,170,40,0.7)" }}>{BIG5_ICONS[i]}</span>
+                    <span style={{ fontSize: 12, ...mono, color: "rgba(255,170,40,0.7)", letterSpacing: 1, fontWeight: 600 }}>{t(key)}</span>
                   </div>
-                  <span style={{ fontSize: 18, ...mono, color: "rgba(255,170,40,0.8)", fontWeight: 600 }}>{big5[i]}</span>
+                  <span style={{ fontSize: 20, ...mono, color: "rgba(255,170,40,0.9)", fontWeight: 700 }}>{big5[i]}</span>
                 </div>
-                <div className="serif" style={{ fontSize: 14, color: "rgba(255,255,255,0.55)", marginBottom: 14, fontStyle: "italic" }}>
+                <div className="serif" style={{ fontSize: 15, color: "rgba(255,255,255,0.8)", marginBottom: 14, fontStyle: "italic" }}>
                   {t(`${key}_q`)}
                 </div>
                 <input type="range" min={1} max={10} value={big5[i]} onChange={e => updateBig5(i, parseInt(e.target.value))} />
@@ -539,7 +540,7 @@ export default function App() {
 
         {/* ─── PAGE 3: GENERATE ─── */}
         {page === "generate" && (
-          <div style={{ animation: "fadeUp 0.4s ease" }}>
+          <div style={{ animation: "fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) both" }}>
             <div style={{ padding: "18px 22px", marginBottom: 28, background: "rgba(255,255,255,0.015)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: 10 }}>
               <div style={{ fontSize: 9, ...mono, color: "rgba(255,170,40,0.35)", letterSpacing: 2, marginBottom: 10 }}>{t("encoded_state")}</div>
               <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
@@ -588,7 +589,7 @@ export default function App() {
             </button>
 
             {isGenerating && (
-              <div style={{ marginTop: 20, animation: "fadeUp 0.3s ease" }}>
+              <div style={{ marginTop: 20, animation: "fadeUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) both" }}>
                 <div style={{ fontSize: 10, ...mono, color: "rgba(255,255,255,0.2)", marginBottom: 6 }}>
                   {t("sample_of")} {currentSample + 1} / {numSamples}
                 </div>
@@ -605,7 +606,7 @@ export default function App() {
             )}
 
             {trajectories.length > 0 && (
-              <div style={{ marginTop: 40, animation: "fadeUp 0.5s ease" }}>
+              <div style={{ marginTop: 40, animation: "fadeUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) both" }}>
                 <div style={{ fontSize: 9, ...mono, color: "rgba(255,170,40,0.35)", letterSpacing: 3, marginBottom: 20 }}>
                   {t("denoised_title")} — {t("guidance_label")} {guidance} — {t("steps_label")} {denoiseSteps} — BIG5 [{big5.join(",")}]
                 </div>
