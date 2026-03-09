@@ -3,6 +3,12 @@ import { useI18n } from "./i18n";
 
 // ─── Config ───────────────────────────────────────────────
 const DEFAULT_API_URL = import.meta.env.VITE_API_URL || "";
+const DEFAULT_PROVIDER = "openrouter";
+const OPENROUTER_MODELS = [
+  "openai/gpt-5.4",
+  "google/gemini-3.1-pro-preview",
+  "anthropic/claude-sonnet-4.6",
+];
 
 const BIG5_KEYS = ["openness", "conscientiousness", "extraversion", "agreeableness", "neuroticism"];
 const BIG5_ICONS = ["◈", "◉", "◎", "◇", "◆"];
@@ -231,7 +237,7 @@ export default function App() {
   const [guidance, setGuidance] = useState(7);
   const [numSamples, setNumSamples] = useState(3);
   const [denoiseSteps, setDenoiseSteps] = useState(4);
-  const [provider, setProvider] = useState("anthropic");
+  const [model, setModel] = useState(OPENROUTER_MODELS[0]);
   const [apiUrl, setApiUrl] = useState(DEFAULT_API_URL);
   const [isGenerating, setIsGenerating] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
@@ -245,20 +251,16 @@ export default function App() {
   const updateBig5 = (idx, val) => setBig5(b => { const n = [...b]; n[idx] = val; return n; });
   const hasMinInput = fields.age || fields.skills || fields.obsessions;
 
-  const callClaude = async (messages) => {
+  const callModel = async (messages) => {
     const endpoint = apiUrl.replace(/\/$/, "");
     if (!endpoint) throw new Error("API endpoint not configured. Open Settings to set your worker URL.");
 
     try {
-      const model = provider === "openrouter"
-        ? "anthropic/claude-sonnet-4-20250514"
-        : "claude-sonnet-4-20250514";
-
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          provider,
+          provider: DEFAULT_PROVIDER,
           model,
           max_tokens: 1000,
           messages
@@ -303,7 +305,7 @@ export default function App() {
           if (abortRef.current) break;
           setCurrentStep(step);
           const msg = generateStepPrompt(step, denoiseSteps, stateStr, guidance, step > 0 ? stepResults[step - 1] : null);
-          const result = await callClaude([msg]);
+          const result = await callModel([msg]);
           stepResults.push(result);
         }
         if (!abortRef.current) {
@@ -387,17 +389,38 @@ export default function App() {
 
             <div>
               <label style={label}>{t("provider_label")}</label>
-              <div style={{ display: "flex", gap: 8 }}>
-                {["anthropic", "openrouter"].map(p => (
-                  <button key={p} onClick={() => setProvider(p)} style={{
-                    flex: 1, padding: "10px 0",
-                    background: provider === p ? "rgba(255,170,40,0.1)" : "rgba(255,255,255,0.02)",
-                    border: `1px solid ${provider === p ? "rgba(255,170,40,0.25)" : "rgba(255,255,255,0.06)"}`,
-                    borderRadius: 8, cursor: "pointer",
-                    color: provider === p ? "rgba(255,170,40,0.85)" : "rgba(255,255,255,0.3)",
-                    fontSize: 11, ...mono, letterSpacing: 1
+              <div style={{
+                padding: "12px 14px",
+                background: "rgba(255,170,40,0.08)",
+                border: "1px solid rgba(255,170,40,0.18)",
+                borderRadius: 8,
+                color: "rgba(255,170,40,0.85)",
+                fontSize: 11,
+                ...mono,
+                letterSpacing: 1
+              }}>
+                {t("provider_openrouter")}
+              </div>
+            </div>
+
+            <div style={{ marginTop: 16 }}>
+              <label style={label}>{t("model_label")}</label>
+              <div style={{ display: "grid", gap: 8 }}>
+                {OPENROUTER_MODELS.map((modelOption) => (
+                  <button key={modelOption} onClick={() => setModel(modelOption)} style={{
+                    width: "100%",
+                    padding: "12px 14px",
+                    textAlign: "left",
+                    background: model === modelOption ? "rgba(255,170,40,0.1)" : "rgba(255,255,255,0.02)",
+                    border: `1px solid ${model === modelOption ? "rgba(255,170,40,0.25)" : "rgba(255,255,255,0.06)"}`,
+                    borderRadius: 8,
+                    cursor: "pointer",
+                    color: model === modelOption ? "rgba(255,170,40,0.88)" : "rgba(255,255,255,0.45)",
+                    fontSize: 11,
+                    ...mono,
+                    letterSpacing: 0.4
                   }}>
-                    {t(`provider_${p}`)}
+                    {modelOption}
                   </button>
                 ))}
               </div>
@@ -523,7 +546,8 @@ export default function App() {
                 {fields.age && <span style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", ...mono }}>age:{fields.age}</span>}
                 {fields.location && <span style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", ...mono }}>loc:{fields.location}</span>}
                 <span style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", ...mono }}>big5:[{big5.join(",")}]</span>
-                <span style={{ fontSize: 12, color: "rgba(255,170,40,0.35)", ...mono }}>via:{provider}</span>
+                <span style={{ fontSize: 12, color: "rgba(255,170,40,0.35)", ...mono }}>via:{DEFAULT_PROVIDER}</span>
+                <span style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", ...mono }}>model:{model}</span>
               </div>
             </div>
 
