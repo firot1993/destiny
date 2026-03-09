@@ -5,9 +5,8 @@ import { useI18n } from "./i18n";
 const DEFAULT_API_URL = import.meta.env.VITE_API_URL || "";
 const DEFAULT_PROVIDER = "openrouter";
 const OPENROUTER_MODELS = [
-  "openai/gpt-5.4",
-  "google/gemini-3.1-pro-preview",
   "anthropic/claude-sonnet-4.6",
+  "openai/gpt-5.4",
 ];
 
 const BIG5_KEYS = ["openness", "conscientiousness", "extraversion", "agreeableness", "neuroticism"];
