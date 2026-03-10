@@ -46,7 +46,10 @@ function buildStateString(fields, big5, t) {
   return parts.join("\n");
 }
 
-function generateStepPrompt(step, totalSteps, state, guidance, prev, previousSketches = []) {
+const LANG_NAMES = { en: "English", zh: "Chinese (简体中文)", ja: "Japanese", ko: "Korean" };
+
+function generateStepPrompt(step, totalSteps, state, guidance, prev, previousSketches = [], lang = "en") {
+  const langInstruction = lang !== "en" ? `\n\nIMPORTANT: Respond entirely in ${LANG_NAMES[lang] || lang}.` : "";
   const progress = step / (totalSteps - 1);
   const guidanceDesc = guidance >= 7 ? "dramatic pivots, unexpected breakthroughs, biography-worthy" : guidance >= 4 ? "ambitious but grounded, notable achievements" : "meaningful, well-lived, not flashy";
   const personality = "The person's Big Five personality traits should deeply shape the trajectory. High openness = unconventional pivots. High conscientiousness = systematic empire-building. High extraversion = network-driven success. Low agreeableness = disruptive moves. High neuroticism = intense creative or emotional breakthroughs.";
@@ -70,7 +73,7 @@ IMPORTANT: ${personality}
 STEP 1 of ${totalSteps}: NOISY SKETCH
 Generate a very rough, noisy sketch of a possible life trajectory. Vague, fragmented — just hints. Like a diffusion model at high noise. ${totalSteps <= 3 ? "4-5" : "3-4"} short fragmented phrases. No full sentences. Signal emerging from noise.${variationDirective}
 
-Respond with ONLY the trajectory sketch, nothing else.`
+Respond with ONLY the trajectory sketch, nothing else.${langInstruction}`
     };
   }
 
@@ -95,7 +98,7 @@ Vivid, coherent, compelling. Each moment connects with inevitability. Include:
 
 Flowing narrative, 8-12 sentences. Deeply personal — not generic.
 
-Respond with ONLY the final trajectory, nothing else.`
+Respond with ONLY the final trajectory, nothing else.${langInstruction}`
     };
   }
 
@@ -113,7 +116,7 @@ ${prev}
 STEP ${step + 1}: ADDING STRUCTURE (${Math.round(progress * 100)}% denoised)
 Add structure. Let causality emerge. Still rough but recognizable patterns. Add approximate timeframes. Personality traits shape HOW things happen. 5-6 sentences.
 
-Respond with ONLY the refined trajectory, nothing else.`
+Respond with ONLY the refined trajectory, nothing else.${langInstruction}`
     };
   }
 
@@ -131,7 +134,7 @@ ${prev}
 STEP ${step + 1}: SHARPENING (${Math.round(progress * 100)}% denoised)
 Add specificity — concrete decisions, turning points, key moments. Show cause and effect. At guidance ${guidance}/10: ${guidanceDesc}. 6-8 sentences with clear timeframes.
 
-Respond with ONLY the sharpened trajectory, nothing else.`
+Respond with ONLY the sharpened trajectory, nothing else.${langInstruction}`
     };
   }
 
@@ -148,7 +151,7 @@ ${prev}
 STEP ${step + 1}: FINE DETAIL (${Math.round(progress * 100)}% denoised)
 Refine — emotional depth, internal transformations, precise moments. Make each transition feel inevitable. Personality colors every decision. 7-10 sentences.
 
-Respond with ONLY the refined trajectory, nothing else.`
+Respond with ONLY the refined trajectory, nothing else.${langInstruction}`
   };
 }
 
@@ -358,7 +361,7 @@ export default function App() {
         for (let step = 0; step < denoiseSteps; step++) {
           if (abortRef.current) break;
           setCurrentStep(step);
-          const msg = generateStepPrompt(step, denoiseSteps, stateStr, guidance, step > 0 ? stepResults[step - 1] : null, previousSketches);
+          const msg = generateStepPrompt(step, denoiseSteps, stateStr, guidance, step > 0 ? stepResults[step - 1] : null, previousSketches, lang);
           const temp = Math.min(1.0 + s * 0.15, 1.6);
           const result = step === 0
             ? await callModel([msg], temp, { provider: "gemini", model: "gemini-3-flash-preview" })
