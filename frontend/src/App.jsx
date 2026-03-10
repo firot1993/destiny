@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useI18n } from "./i18n";
 
 // ─── Config ───────────────────────────────────────────────
@@ -27,6 +27,100 @@ const INPUT_FIELDS = [
   { key: "constraints", type: "medium" },
   { key: "obsessions", type: "long" },
 ];
+
+const DAILY_USAGE_STORAGE_PREFIX = "destiny-daily-usage";
+
+function normalizeApiEndpoint(url) {
+  return (url || "").trim().replace(/\/$/, "");
+}
+
+function getUtcDateKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function getDailyUsageStorageKey(endpoint) {
+  const normalized = normalizeApiEndpoint(endpoint);
+  if (!normalized) return null;
+  return `${DAILY_USAGE_STORAGE_PREFIX}:${normalized}:${getUtcDateKey()}`;
+}
+
+function parseHeaderInt(value) {
+  if (value === null || value === undefined) return null;
+  const parsed = parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function clampDailyRemaining(remaining, limit) {
+  return Math.max(0, Math.min(remaining, limit));
+}
+
+function readDailyUsageSnapshot(endpoint) {
+  if (typeof window === "undefined") return null;
+
+  const storageKey = getDailyUsageStorageKey(endpoint);
+  if (!storageKey) return null;
+
+  try {
+    const raw = window.localStorage.getItem(storageKey);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw);
+    const limit = parseHeaderInt(parsed?.limit);
+    const remaining = parseHeaderInt(parsed?.remaining);
+    if (limit === null || remaining === null) return null;
+
+    return {
+      limit,
+      remaining: clampDailyRemaining(remaining, limit)
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeDailyUsageSnapshot(endpoint, usage) {
+  if (typeof window === "undefined") return;
+
+  const storageKey = getDailyUsageStorageKey(endpoint);
+  if (!storageKey || !usage) return;
+
+  try {
+    window.localStorage.setItem(storageKey, JSON.stringify({
+      limit: usage.limit,
+      remaining: usage.remaining
+    }));
+  } catch {
+    // Ignore storage failures and keep the in-memory counter working.
+  }
+}
+
+function resolveDailyUsage({ currentUsage, headerLimit, headerRemaining, shouldConsumeQuota }) {
+  const nextLimit = headerLimit ?? currentUsage?.limit ?? null;
+  if (nextLimit === null) return null;
+
+  if (headerRemaining !== null) {
+    return {
+      limit: nextLimit,
+      remaining: clampDailyRemaining(headerRemaining, nextLimit)
+    };
+  }
+
+  if (!shouldConsumeQuota) {
+    const stableRemaining = currentUsage?.remaining ?? null;
+    if (stableRemaining === null) return null;
+
+    return {
+      limit: nextLimit,
+      remaining: clampDailyRemaining(stableRemaining, nextLimit)
+    };
+  }
+
+  const baselineRemaining = currentUsage?.remaining ?? headerRemaining ?? nextLimit;
+  return {
+    limit: nextLimit,
+    remaining: clampDailyRemaining(baselineRemaining - 1, nextLimit)
+  };
+}
 
 // ─── Prompt generator ─────────────────────────────────────
 function buildStateString(fields, big5, t) {
@@ -279,6 +373,7 @@ export default function App() {
   const [currentSample, setCurrentSample] = useState(0);
   const [dailyRemaining, setDailyRemaining] = useState(null);
   const [dailyLimit, setDailyLimit] = useState(null);
+  const [dailyUsageDate, setDailyUsageDate] = useState(() => getUtcDateKey());
   const [trajectories, setTrajectories] = useState([]);
   const [allStepOutputs, setAllStepOutputs] = useState([]);
   const [error, setError] = useState(null);
@@ -289,11 +384,32 @@ export default function App() {
   const updateBig5 = (idx, val) => setBig5(b => { const n = [...b]; n[idx] = val; return n; });
   const hasMinInput = fields.age || fields.skills || fields.obsessions;
 
+  useEffect(() => {
+    const today = getUtcDateKey();
+    setDailyUsageDate(today);
+
+    const snapshot = readDailyUsageSnapshot(apiUrl);
+    if (!snapshot) {
+      setDailyRemaining(null);
+      setDailyLimit(null);
+      return;
+    }
+
+    setDailyRemaining(snapshot.remaining);
+    setDailyLimit(snapshot.limit);
+  }, [apiUrl]);
+
   const callModel = async (messages, temperature = 1.0, { provider: overrideProvider, model: overrideModel } = {}) => {
-    const endpoint = apiUrl.replace(/\/$/, "");
+    const endpoint = normalizeApiEndpoint(apiUrl);
     if (!endpoint) throw new Error("API endpoint not configured. Open Settings to set your worker URL.");
 
     try {
+      const today = getUtcDateKey();
+      const currentUsage = readDailyUsageSnapshot(endpoint)
+        || (dailyUsageDate === today && dailyRemaining !== null && dailyLimit !== null
+          ? { remaining: dailyRemaining, limit: dailyLimit }
+          : null);
+
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -306,11 +422,19 @@ export default function App() {
         })
       });
 
-      // Update daily usage from response headers
-      const remaining = res.headers.get("X-Daily-Remaining");
-      const limit = res.headers.get("X-Daily-Limit");
-      if (remaining !== null) setDailyRemaining(parseInt(remaining));
-      if (limit !== null) setDailyLimit(parseInt(limit));
+      const usage = resolveDailyUsage({
+        currentUsage,
+        headerRemaining: parseHeaderInt(res.headers.get("X-Daily-Remaining")),
+        headerLimit: parseHeaderInt(res.headers.get("X-Daily-Limit")),
+        shouldConsumeQuota: ![403, 405, 429].includes(res.status)
+      });
+
+      if (usage) {
+        setDailyUsageDate(today);
+        setDailyRemaining(usage.remaining);
+        setDailyLimit(usage.limit);
+        writeDailyUsageSnapshot(endpoint, usage);
+      }
 
       if (!res.ok) {
         const errText = await res.text();

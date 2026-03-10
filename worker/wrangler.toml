@@ -4,9 +4,17 @@ compatibility_date = "2024-01-01"
 
 [placement]
 mode = "smart"
-hint = "wnam"
 
-# Optional: KV namespace for rate limiting
+# Global daily limit via Durable Object
+[[durable_objects.bindings]]
+name = "DAILY_LIMITER"
+class_name = "DailyLimitDurableObject"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["DailyLimitDurableObject"]
+
+# Optional: KV namespace for per-IP per-minute rate limiting
 # Uncomment after creating: wrangler kv:namespace create RATE_LIMIT
 # [[kv_namespaces]]
 # binding = "RATE_LIMIT"
