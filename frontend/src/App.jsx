@@ -487,9 +487,7 @@ export default function App() {
           setCurrentStep(step);
           const msg = generateStepPrompt(step, denoiseSteps, stateStr, guidance, step > 0 ? stepResults[step - 1] : null, previousSketches, lang);
           const temp = Math.min(1.0 + s * 0.15, 1.6);
-          const result = step === 0
-            ? await callModel([msg], temp, { provider: "gemini", model: "gemini-3-flash-preview" })
-            : await callModel([msg], temp);
+          const result = await callModel([msg], temp);
           stepResults.push(result);
           if (step === 0) previousSketches.push(result);
         }
@@ -596,9 +594,6 @@ export default function App() {
                     {p}
                   </button>
                 ))}
-              </div>
-              <div style={{ marginTop: 6, fontSize: 10, color: "rgba(255,255,255,0.3)", ...mono }}>
-                Step 1 always uses Gemini + Google Search
               </div>
             </div>
 
