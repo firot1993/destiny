@@ -5,8 +5,9 @@ import { useI18n } from "./i18n";
 const DEFAULT_API_URL = import.meta.env.VITE_API_URL || "";
 const DEFAULT_PROVIDER = "openrouter";
 const OPENROUTER_MODELS = [
-  "anthropic/claude-sonnet-4.6",
-  "openai/gpt-5.4",
+  "anthropic/claude-sonnet-4-5",
+  "anthropic/claude-sonnet-4-6",
+  "openai/gpt-4o",
 ];
 
 const BIG5_KEYS = ["openness", "conscientiousness", "extraversion", "agreeableness", "neuroticism"];

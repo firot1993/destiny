@@ -47,7 +47,7 @@ export default {
           content: m.content
         }));
         apiBody = JSON.stringify({
-          model: body.model || "anthropic/claude-sonnet-4-20250514",
+          model: body.model || "anthropic/claude-sonnet-4-5",
           max_tokens: body.max_tokens || 1000,
           temperature: body.temperature ?? 1.0,
           messages
@@ -92,8 +92,10 @@ export default {
       if (provider === "openrouter") {
         const text = extractOpenRouterText(data);
         if (!text) {
+          const finishReason = data?.choices?.[0]?.finish_reason || "unknown";
+          const upstreamErr = extractUpstreamError(data);
           return jsonResponse({
-            error: extractUpstreamError(data) || "Upstream API returned no text content."
+            error: upstreamErr || `No content returned (finish_reason: ${finishReason})`
           }, 502, env);
         }
 
