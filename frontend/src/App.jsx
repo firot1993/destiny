@@ -29,8 +29,8 @@ const INPUT_FIELDS = [
 ];
 
 const NOISE_SCAN_COUNT = 10;
-const MAX_NOISE_REMOVALS = 5;
-const MIN_KEPT_NOISE = NOISE_SCAN_COUNT - MAX_NOISE_REMOVALS;
+const MAX_KEPT_NOISE = 5;
+const MAX_REMOVED_NOISE = NOISE_SCAN_COUNT - MAX_KEPT_NOISE;
 const DAILY_USAGE_STORAGE_PREFIX = "destiny-daily-usage";
 
 function normalizeApiEndpoint(url) {
@@ -309,6 +309,12 @@ function parseNoiseFragments(rawText) {
     .slice(0, NOISE_SCAN_COUNT);
 }
 
+function buildMergedNoiseSeed(fragments) {
+  return fragments
+    .map((fragment, index) => `${index + 1}::${fragment.text}`)
+    .join("\n");
+}
+
 // ─── Components ───────────────────────────────────────────
 function StepIndicator({ currentStep, totalSteps, isGenerating }) {
   const { t } = useI18n();
@@ -420,50 +426,124 @@ function WorkflowRail({ stage }) {
   );
 }
 
-function NoiseCard({ fragment, onToggle, disableRemove, isBusy }) {
+function NoiseReviewCard({ fragment, currentIndex, totalCount, keptCount, onRemove, onKeep, disableRemove, disableKeep, isBusy }) {
   const { t } = useI18n();
-  const isRemoved = fragment.removed;
+  const keepSlotsLeft = Math.max(0, MAX_KEPT_NOISE - keptCount);
 
   return (
     <div style={{
-      padding: "18px 18px 16px",
-      borderRadius: 12,
-      border: `1px solid ${isRemoved ? "rgba(255,90,90,0.16)" : "rgba(255,255,255,0.08)"}`,
-      background: isRemoved ? "rgba(255,70,50,0.04)" : "rgba(255,255,255,0.025)",
-      opacity: isRemoved ? 0.45 : 1,
-      transition: "all 0.3s ease"
+      marginBottom: 24,
+      padding: "22px 22px 20px",
+      borderRadius: 14,
+      border: "1px solid rgba(255,255,255,0.08)",
+      background: "rgba(255,255,255,0.025)"
     }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 14 }}>
-        <div style={{ fontSize: 10, fontFamily: "'JetBrains Mono', monospace", letterSpacing: 2, color: isRemoved ? "rgba(255,120,120,0.5)" : "rgba(255,170,40,0.62)" }}>
-          #{fragment.id}
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+        <div style={{ fontSize: 9, fontFamily: "'JetBrains Mono', monospace", letterSpacing: 2, color: "rgba(255,170,40,0.52)" }}>
+          {t("noise_card_label")} {currentIndex} / {totalCount}
         </div>
-        <button
-          onClick={() => onToggle(fragment.id)}
-          disabled={isBusy || (!isRemoved && disableRemove)}
-          style={{
-            padding: "6px 10px",
-            borderRadius: 999,
-            border: `1px solid ${isRemoved ? "rgba(255,255,255,0.08)" : "rgba(255,90,90,0.18)"}`,
-            background: isRemoved ? "rgba(255,255,255,0.04)" : "rgba(255,70,50,0.08)",
-            color: isRemoved ? "rgba(255,255,255,0.52)" : "rgba(255,120,120,0.82)",
-            fontSize: 9,
-            fontFamily: "'JetBrains Mono', monospace",
-            letterSpacing: 1.4,
-            cursor: isBusy ? "default" : "pointer"
-          }}
-        >
-          {isRemoved ? t("noise_restore") : t("noise_remove")}
-        </button>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <div style={{ padding: "5px 9px", borderRadius: 999, background: "rgba(255,170,40,0.08)", color: "rgba(255,170,40,0.78)", fontSize: 9, fontFamily: "'JetBrains Mono', monospace", letterSpacing: 1.2 }}>
+            {keptCount} / {MAX_KEPT_NOISE} {t("noise_kept")}
+          </div>
+          <div style={{ padding: "5px 9px", borderRadius: 999, background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.44)", fontSize: 9, fontFamily: "'JetBrains Mono', monospace", letterSpacing: 1.2 }}>
+            {keepSlotsLeft} {t("noise_keep_slots_left")}
+          </div>
+        </div>
       </div>
+
       <p className="serif" style={{
-        margin: 0,
-        fontSize: 15,
-        lineHeight: 1.7,
-        color: isRemoved ? "rgba(255,255,255,0.36)" : "rgba(255,255,255,0.86)",
+        margin: "0 0 18px",
+        fontSize: 17,
+        lineHeight: 1.85,
+        color: "rgba(255,255,255,0.9)",
         fontStyle: "italic"
       }}>
         {fragment.text}
       </p>
+
+      <p className="serif" style={{ margin: "0 0 18px", fontSize: 14, lineHeight: 1.7, color: "rgba(255,255,255,0.58)" }}>
+        {t("noise_review_hint")}
+      </p>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <button
+          onClick={onRemove}
+          disabled={isBusy || disableRemove}
+          style={{
+            padding: "16px 0",
+            borderRadius: 10,
+            border: "1px solid rgba(255,90,90,0.18)",
+            background: "rgba(255,70,50,0.08)",
+            color: "rgba(255,120,120,0.85)",
+            fontSize: 11,
+            fontFamily: "'JetBrains Mono', monospace",
+            letterSpacing: 2,
+            cursor: isBusy ? "default" : "pointer"
+          }}
+        >
+          {t("noise_remove_action")}
+        </button>
+        <button
+          onClick={onKeep}
+          disabled={isBusy || disableKeep}
+          style={{
+            padding: "16px 0",
+            borderRadius: 10,
+            border: "1px solid rgba(255,170,40,0.24)",
+            background: "rgba(255,170,40,0.1)",
+            color: "rgba(255,170,40,0.88)",
+            fontSize: 11,
+            fontFamily: "'JetBrains Mono', monospace",
+            letterSpacing: 2,
+            cursor: isBusy ? "default" : "pointer"
+          }}
+        >
+          {t("noise_keep_action")}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function KeptSignalsPanel({ fragments }) {
+  const { t } = useI18n();
+
+  if (fragments.length === 0) return null;
+
+  return (
+    <div style={{
+      marginBottom: 24,
+      padding: "18px 22px 22px",
+      background: "rgba(255,255,255,0.02)",
+      border: "1px solid rgba(255,255,255,0.06)",
+      borderRadius: 12
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
+        <div style={{ fontSize: 9, fontFamily: "'JetBrains Mono', monospace", color: "rgba(255,170,40,0.42)", letterSpacing: 2 }}>
+          {t("kept_signals_title")}
+        </div>
+        <div style={{ padding: "5px 9px", borderRadius: 999, background: "rgba(255,170,40,0.08)", color: "rgba(255,170,40,0.78)", fontSize: 9, fontFamily: "'JetBrains Mono', monospace", letterSpacing: 1.2 }}>
+          {fragments.length} / {MAX_KEPT_NOISE} {t("noise_kept")}
+        </div>
+      </div>
+      <div style={{ display: "grid", gap: 10 }}>
+        {fragments.map((fragment, index) => (
+          <div key={fragment.id} style={{
+            padding: "14px 16px",
+            borderRadius: 10,
+            background: "rgba(255,170,40,0.04)",
+            border: "1px solid rgba(255,170,40,0.1)"
+          }}>
+            <div style={{ fontSize: 9, fontFamily: "'JetBrains Mono', monospace", letterSpacing: 2, color: "rgba(255,170,40,0.48)", marginBottom: 6 }}>
+              {t("noise_card_label")} {index + 1}
+            </div>
+            <p className="serif" style={{ margin: 0, fontSize: 15, lineHeight: 1.7, color: "rgba(255,255,255,0.84)", fontStyle: "italic" }}>
+              {fragment.text}
+            </p>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -484,8 +564,9 @@ export default function App() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [runPhase, setRunPhase] = useState("idle");
   const [currentStep, setCurrentStep] = useState(0);
-  const [currentTrajectory, setCurrentTrajectory] = useState(0);
   const [noiseFragments, setNoiseFragments] = useState([]);
+  const [currentNoiseIndex, setCurrentNoiseIndex] = useState(0);
+  const [keptNoiseFragments, setKeptNoiseFragments] = useState([]);
   const [dailyRemaining, setDailyRemaining] = useState(null);
   const [dailyLimit, setDailyLimit] = useState(null);
   const [dailyUsageDate, setDailyUsageDate] = useState(() => getUtcDateKey());
@@ -498,17 +579,18 @@ export default function App() {
   const updateField = (key, val) => setFields(f => ({ ...f, [key]: val }));
   const updateBig5 = (idx, val) => setBig5(b => { const n = [...b]; n[idx] = val; return n; });
   const hasMinInput = fields.age || fields.skills || fields.obsessions;
-  const removedNoiseCount = noiseFragments.filter((fragment) => fragment.removed).length;
-  const keptNoiseFragments = noiseFragments.filter((fragment) => !fragment.removed);
+  const currentNoiseFragment = runPhase === "reviewing" ? noiseFragments[currentNoiseIndex] ?? null : null;
+  const removedNoiseCount = Math.max(0, currentNoiseIndex - keptNoiseFragments.length);
+  const keepSlotsLeft = Math.max(0, MAX_KEPT_NOISE - keptNoiseFragments.length);
   const workflowStage = runPhase === "scanning"
     ? "scan"
-    : runPhase === "denoising" || trajectories.length > 0
+    : runPhase === "reviewing" || runPhase === "ready"
+      ? "curate"
+      : runPhase === "denoising" || trajectories.length > 0
       ? "denoise"
-      : noiseFragments.length > 0
-        ? "curate"
-        : "scan";
-  const canRemoveMoreNoise = removedNoiseCount < MAX_NOISE_REMOVALS;
-  const canDenoiseSelectedNoise = keptNoiseFragments.length >= MIN_KEPT_NOISE;
+      : "scan";
+  const canRemoveCurrentNoise = Boolean(currentNoiseFragment);
+  const canKeepCurrentNoise = Boolean(currentNoiseFragment) && keepSlotsLeft > 0;
 
   useEffect(() => {
     const today = getUtcDateKey();
@@ -596,21 +678,35 @@ export default function App() {
     setAllStepOutputs([]);
   };
 
-  const toggleNoiseFragment = (fragmentId) => {
-    if (isGenerating) return;
+  const decideCurrentNoise = (decision) => {
+    if (isGenerating || !currentNoiseFragment) return;
 
     setError(null);
-    setRunPhase("review");
     clearDenoisedOutputs();
-    setNoiseFragments((current) => {
-      const fragment = current.find((item) => item.id === fragmentId);
-      if (!fragment) return current;
+    const nextKeptNoise = decision === "keep"
+      ? [...keptNoiseFragments, currentNoiseFragment]
+      : keptNoiseFragments;
+    const nextNoiseIndex = currentNoiseIndex + 1;
+    const removedAfterDecision = nextNoiseIndex - nextKeptNoise.length;
 
-      const nextRemovedCount = current.filter((item) => item.removed).length;
-      if (!fragment.removed && nextRemovedCount >= MAX_NOISE_REMOVALS) return current;
+    if (nextKeptNoise.length >= MAX_KEPT_NOISE) {
+      setKeptNoiseFragments(nextKeptNoise);
+      setCurrentNoiseIndex(nextNoiseIndex);
+      setRunPhase("ready");
+      return;
+    }
 
-      return current.map((item) => item.id === fragmentId ? { ...item, removed: !item.removed } : item);
-    });
+    if (removedAfterDecision >= MAX_REMOVED_NOISE) {
+      const remainingNoise = noiseFragments.slice(nextNoiseIndex);
+      setKeptNoiseFragments([...nextKeptNoise, ...remainingNoise]);
+      setCurrentNoiseIndex(noiseFragments.length);
+      setRunPhase("ready");
+      return;
+    }
+
+    setKeptNoiseFragments(nextKeptNoise);
+    setCurrentNoiseIndex(nextNoiseIndex);
+    setRunPhase(nextNoiseIndex >= noiseFragments.length ? "ready" : "reviewing");
   };
 
   const scanNoiseFragments = async () => {
@@ -621,11 +717,12 @@ export default function App() {
     setIsGenerating(true);
     setRunPhase("scanning");
     setNoiseFragments([]);
+    setKeptNoiseFragments([]);
+    setCurrentNoiseIndex(0);
     clearDenoisedOutputs();
     setError(null);
     abortRef.current = false;
     setCurrentStep(0);
-    setCurrentTrajectory(0);
 
     try {
       const msg = generateStepPrompt(0, denoiseSteps, stateStr, guidance, null, lang);
@@ -637,16 +734,15 @@ export default function App() {
       }
 
       const parsedNoise = parseNoiseFragments(rawNoise);
-      if (parsedNoise.length < MIN_KEPT_NOISE) {
-        throw new Error(`Noise scan returned only ${parsedNoise.length} usable fragments.`);
+      if (parsedNoise.length === 0) {
+        throw new Error("Noise scan returned no usable fragments.");
       }
 
       setNoiseFragments(parsedNoise.map((text, index) => ({
         id: index + 1,
-        text,
-        removed: false
+        text
       })));
-      setRunPhase("review");
+      setRunPhase("reviewing");
     } catch (e) {
       setError(e.message);
       setRunPhase("idle");
@@ -658,11 +754,11 @@ export default function App() {
   };
 
   const denoiseSelectedNoise = async () => {
-    if (generationLockRef.current || !canDenoiseSelectedNoise) return;
+    if (generationLockRef.current || keptNoiseFragments.length === 0) return;
     generationLockRef.current = true;
 
     const stateStr = buildStateString(fields, big5, t);
-    const activeNoiseFragments = keptNoiseFragments;
+    const mergedNoiseSeed = buildMergedNoiseSeed(keptNoiseFragments);
     setIsGenerating(true);
     setRunPhase("denoising");
     clearDenoisedOutputs();
@@ -670,31 +766,26 @@ export default function App() {
     abortRef.current = false;
 
     try {
-      for (let s = 0; s < activeNoiseFragments.length; s++) {
+      const stepResults = [mergedNoiseSeed];
+
+      for (let step = 1; step < denoiseSteps; step++) {
         if (abortRef.current) break;
-
-        setCurrentTrajectory(s);
-        const stepResults = [activeNoiseFragments[s].text];
-
-        for (let step = 1; step < denoiseSteps; step++) {
-          if (abortRef.current) break;
-          setCurrentStep(step);
-          const msg = generateStepPrompt(step, denoiseSteps, stateStr, guidance, stepResults[step - 1], lang);
-          const temp = Math.min(1.0 + s * 0.08, 1.4);
-          const result = await callModel([msg], temp);
-          stepResults.push(result);
-        }
-
-        if (!abortRef.current && stepResults.length > 0) {
-          setTrajectories(prev => [...prev, stepResults[stepResults.length - 1]]);
-          setAllStepOutputs(prev => [...prev, stepResults]);
-        }
+        setCurrentStep(step);
+        const msg = generateStepPrompt(step, denoiseSteps, stateStr, guidance, stepResults[step - 1], lang);
+        const temp = 1.05;
+        const result = await callModel([msg], temp);
+        stepResults.push(result);
       }
 
-      setRunPhase(abortRef.current ? "review" : "complete");
+      if (!abortRef.current && stepResults.length > 0) {
+        setTrajectories([stepResults[stepResults.length - 1]]);
+        setAllStepOutputs([stepResults]);
+      }
+
+      setRunPhase(abortRef.current ? "ready" : "complete");
     } catch (e) {
       setError(e.message);
-      setRunPhase("review");
+      setRunPhase("ready");
     } finally {
       generationLockRef.current = false;
       setIsGenerating(false);
@@ -990,49 +1081,52 @@ export default function App() {
               </div>
             )}
 
-            {noiseFragments.length > 0 && (
+            {currentNoiseFragment && (
+              <NoiseReviewCard
+                fragment={currentNoiseFragment}
+                currentIndex={currentNoiseIndex + 1}
+                totalCount={noiseFragments.length}
+                keptCount={keptNoiseFragments.length}
+                onRemove={() => decideCurrentNoise("remove")}
+                onKeep={() => decideCurrentNoise("keep")}
+                disableRemove={!canRemoveCurrentNoise}
+                disableKeep={!canKeepCurrentNoise}
+                isBusy={isGenerating}
+              />
+            )}
+
+            {noiseFragments.length > 0 && !currentNoiseFragment && (
               <div style={{
                 marginBottom: 24,
-                padding: "20px 22px 22px",
+                padding: "18px 22px",
                 background: "rgba(255,255,255,0.02)",
                 border: "1px solid rgba(255,255,255,0.06)",
                 borderRadius: 12
               }}>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 10, flexWrap: "wrap" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
                   <div style={{ fontSize: 9, ...mono, color: "rgba(255,170,40,0.4)", letterSpacing: 2 }}>
                     {t("noise_title")}
                   </div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     <div style={{ padding: "5px 9px", borderRadius: 999, background: "rgba(255,170,40,0.08)", color: "rgba(255,170,40,0.76)", fontSize: 9, ...mono, letterSpacing: 1.2 }}>
-                      {keptNoiseFragments.length} {t("noise_kept")}
+                      {keptNoiseFragments.length} / {MAX_KEPT_NOISE} {t("noise_kept")}
                     </div>
                     <div style={{ padding: "5px 9px", borderRadius: 999, background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.45)", fontSize: 9, ...mono, letterSpacing: 1.2 }}>
-                      {removedNoiseCount} {t("noise_removed")}
-                    </div>
-                    <div style={{ padding: "5px 9px", borderRadius: 999, background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.45)", fontSize: 9, ...mono, letterSpacing: 1.2 }}>
-                      {Math.max(0, MAX_NOISE_REMOVALS - removedNoiseCount)} {t("noise_left")}
+                      {removedNoiseCount} / {MAX_REMOVED_NOISE} {t("noise_deleted")}
                     </div>
                   </div>
                 </div>
-                <p className="serif" style={{ margin: "0 0 16px", fontSize: 15, lineHeight: 1.75, color: removedNoiseCount >= MAX_NOISE_REMOVALS ? "rgba(255,120,120,0.82)" : "rgba(255,255,255,0.62)" }}>
-                  {t("noise_prune_hint")}
+                <p className="serif" style={{ margin: 0, fontSize: 15, lineHeight: 1.75, color: "rgba(255,255,255,0.62)" }}>
+                  {t("noise_ready_hint")}
                 </p>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 12 }}>
-                  {noiseFragments.map((fragment) => (
-                    <NoiseCard
-                      key={fragment.id}
-                      fragment={fragment}
-                      onToggle={toggleNoiseFragment}
-                      disableRemove={!fragment.removed && !canRemoveMoreNoise}
-                      isBusy={isGenerating}
-                    />
-                  ))}
-                </div>
               </div>
             )}
 
-            <button onClick={isGenerating ? () => { abortRef.current = true; } : noiseFragments.length > 0 ? denoiseSelectedNoise : scanNoiseFragments}
-              disabled={(!apiUrl && !isGenerating) || (!isGenerating && noiseFragments.length > 0 && !canDenoiseSelectedNoise)}
+            <KeptSignalsPanel fragments={keptNoiseFragments} />
+
+            {!currentNoiseFragment && (
+              <button onClick={isGenerating ? () => { abortRef.current = true; } : noiseFragments.length > 0 ? denoiseSelectedNoise : scanNoiseFragments}
+              disabled={(!apiUrl && !isGenerating) || (!isGenerating && noiseFragments.length > 0 && keptNoiseFragments.length === 0)}
               style={{
                 width: "100%", padding: "18px 0",
                 background: isGenerating ? "rgba(255,70,50,0.12)" : "rgba(255,170,40,0.1)",
@@ -1040,10 +1134,11 @@ export default function App() {
                 borderRadius: 10, cursor: "pointer",
                 color: isGenerating ? "rgba(255,70,50,0.85)" : "rgba(255,170,40,0.85)",
                 fontSize: 12, ...mono, fontWeight: 600, letterSpacing: 3, transition: "all 0.3s ease",
-                opacity: ((!apiUrl && !isGenerating) || (!isGenerating && noiseFragments.length > 0 && !canDenoiseSelectedNoise)) ? 0.3 : 1
+                opacity: ((!apiUrl && !isGenerating) || (!isGenerating && noiseFragments.length > 0 && keptNoiseFragments.length === 0)) ? 0.3 : 1
               }}>
-              {isGenerating ? t("btn_stop") : noiseFragments.length > 0 ? `${t("btn_denoise_kept")} ${keptNoiseFragments.length}` : t("btn_scan_noise")}
+              {isGenerating ? t("btn_stop") : noiseFragments.length > 0 ? t("btn_denoise_merged") : t("btn_scan_noise")}
             </button>
+            )}
 
             {noiseFragments.length > 0 && !isGenerating && (
               <button
@@ -1077,7 +1172,7 @@ export default function App() {
                 <div style={{ fontSize: 10, ...mono, color: "rgba(255,255,255,0.2)", marginBottom: 6 }}>
                   {runPhase === "scanning"
                     ? t("progress_scanning")
-                    : `${t("trajectory_label")} ${currentTrajectory + 1} / ${keptNoiseFragments.length}`}
+                    : `${t("progress_denoising")} ${keptNoiseFragments.length} ${t("merged_signals_label")}`}
                 </div>
                 <StepIndicator currentStep={currentStep} totalSteps={denoiseSteps} isGenerating={true} />
               </div>
@@ -1094,7 +1189,7 @@ export default function App() {
             {trajectories.length > 0 && (
               <div style={{ marginTop: 40, animation: "fadeUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) both" }}>
                 <div style={{ fontSize: 9, ...mono, color: "rgba(255,170,40,0.35)", letterSpacing: 3, marginBottom: 20 }}>
-                  {t("denoised_title")} — {keptNoiseFragments.length}/{noiseFragments.length} {t("noise_kept")} — {t("guidance_label")} {guidance} — {t("steps_label")} {denoiseSteps} — BIG5 [{big5.join(",")}]
+                  {t("denoised_title")} — {keptNoiseFragments.length} {t("merged_signals_label")} — {t("guidance_label")} {guidance} — {t("steps_label")} {denoiseSteps} — BIG5 [{big5.join(",")}]
                 </div>
                 {trajectories.map((traj, i) => (
                   <TrajectoryCard key={i} trajectory={traj} index={i} stepOutputs={allStepOutputs[i]} totalSteps={denoiseSteps} />
