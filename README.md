@@ -84,12 +84,19 @@ npm run build
 - **i18n** — English & Chinese (中文)
 - **Dual provider** — Anthropic direct or OpenRouter
 
-## Rate Limiting (Optional)
+## Rate Limiting
 
-To enable rate limiting on the worker:
+The worker now uses two separate mechanisms:
+
+- Global daily limit: a Durable Object enforces the shared `MAX_REQUESTS_PER_DAY` cap exactly.
+- Per-IP per-minute limit: optional KV-backed throttling via `RATE_LIMIT`.
+
+The Durable Object binding and migration are already declared in `worker/wrangler.toml`, so `wrangler deploy` will provision the daily-limit backend automatically.
+
+If you also want the optional per-IP minute limiter, create a KV namespace:
 
 ```bash
-# Create KV namespace
+cd worker
 wrangler kv:namespace create RATE_LIMIT
 
 # Add the returned ID to wrangler.toml

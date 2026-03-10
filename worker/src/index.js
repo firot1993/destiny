@@ -1,3 +1,5 @@
+import { DurableObject } from "cloudflare:workers";
+
 export default {
   async fetch(request, env) {
     // Handle CORS preflight
@@ -8,14 +10,16 @@ export default {
     }
 
     if (request.method !== "POST") {
-      return jsonResponse({ error: "Method not allowed" }, 405, env);
+      const dailyState = await getDailyLimitState(env);
+      return jsonResponse({ error: "Method not allowed" }, 405, env, buildDailyHeaders(dailyState.limit, dailyState.remaining));
     }
 
     // Origin check
     const origin = request.headers.get("Origin") || "";
     const allowed = (env.ALLOWED_ORIGINS || "").split(",").map(s => s.trim());
     if (allowed.length > 0 && allowed[0] !== "" && !allowed.includes(origin)) {
-      return jsonResponse({ error: "Forbidden" }, 403, env);
+      const dailyState = await getDailyLimitState(env);
+      return jsonResponse({ error: "Forbidden" }, 403, env, buildDailyHeaders(dailyState.limit, dailyState.remaining));
     }
 
     // Per-IP rate limiting (per minute)
@@ -25,34 +29,19 @@ export default {
     const maxRequests = parseInt(env.MAX_REQUESTS_PER_MINUTE || "30");
 
     if (currentCount >= maxRequests) {
-      return jsonResponse({ error: "Rate limited. Try again later." }, 429, env);
+      const dailyState = await getDailyLimitState(env);
+      return jsonResponse({ error: "Rate limited. Try again later." }, 429, env, buildDailyHeaders(dailyState.limit, dailyState.remaining));
     }
 
     if (env.RATE_LIMIT) {
       await env.RATE_LIMIT.put(rateLimitKey, String(currentCount + 1), { expirationTtl: 60 });
     }
 
-    // Global daily request limit
-    const maxDaily = parseInt(env.MAX_REQUESTS_PER_DAY || "1000");
-    let dailyRemaining = maxDaily;
-
-    if (env.RATE_LIMIT) {
-      const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-      const dailyKey = `daily:${today}`;
-      const dailyCount = parseInt(await env.RATE_LIMIT.get(dailyKey) || "0");
-
-      if (dailyCount >= maxDaily) {
-        return jsonResponse({ error: "Daily request limit reached. Try again tomorrow." }, 429, env);
-      }
-
-      await env.RATE_LIMIT.put(dailyKey, String(dailyCount + 1), { expirationTtl: 86400 });
-      dailyRemaining = maxDaily - dailyCount - 1;
+    const dailyState = await consumeDailyLimit(env);
+    const dailyHeaders = buildDailyHeaders(dailyState.limit, dailyState.remaining);
+    if (!dailyState.allowed) {
+      return jsonResponse({ error: "Daily request limit reached. Try again tomorrow." }, 429, env, dailyHeaders);
     }
-
-    const dailyHeaders = {
-      "X-Daily-Remaining": String(dailyRemaining),
-      "X-Daily-Limit": String(maxDaily)
-    };
 
     try {
       const body = await request.json();
@@ -190,6 +179,55 @@ export default {
   }
 };
 
+export class DailyLimitDurableObject extends DurableObject {
+  constructor(ctx, env) {
+    super(ctx, env);
+    this.ctx = ctx;
+    this.env = env;
+    this.count = 0;
+    this.initialized = ctx.blockConcurrencyWhile(async () => {
+      const storedCount = await this.ctx.storage.get("count");
+      this.count = typeof storedCount === "number" ? storedCount : 0;
+    });
+  }
+
+  async fetch(request) {
+    await this.initialized;
+
+    const url = new URL(request.url);
+    const limit = parsePositiveInt(url.searchParams.get("limit")) || parsePositiveInt(this.env.MAX_REQUESTS_PER_DAY) || 1000;
+
+    if (request.method === "GET" && url.pathname === "/status") {
+      return internalJsonResponse({
+        allowed: this.count < limit,
+        limit,
+        remaining: Math.max(0, limit - this.count)
+      });
+    }
+
+    if (request.method === "POST" && url.pathname === "/consume") {
+      if (this.count >= limit) {
+        return internalJsonResponse({
+          allowed: false,
+          limit,
+          remaining: 0
+        });
+      }
+
+      this.count += 1;
+      await this.ctx.storage.put("count", this.count);
+
+      return internalJsonResponse({
+        allowed: true,
+        limit,
+        remaining: Math.max(0, limit - this.count)
+      });
+    }
+
+    return internalJsonResponse({ error: "Not found" }, 404);
+  }
+}
+
 function corsHeaders() {
   return {
     "Access-Control-Allow-Origin": "*",
@@ -210,6 +248,42 @@ function jsonResponse(data, status, env, extraHeaders) {
   });
 }
 
+async function getDailyLimitState(env) {
+  return callDailyLimitDurableObject(env, "status");
+}
+
+async function consumeDailyLimit(env) {
+  return callDailyLimitDurableObject(env, "consume", { method: "POST" });
+}
+
+async function callDailyLimitDurableObject(env, action, init) {
+  if (!env.DAILY_LIMITER) {
+    throw new Error("DAILY_LIMITER Durable Object binding is not configured.");
+  }
+
+  const maxDaily = parsePositiveInt(env.MAX_REQUESTS_PER_DAY) || 1000;
+  const stub = env.DAILY_LIMITER.getByName(getUtcDateKey());
+  const response = await stub.fetch(`https://daily-limit/${action}?limit=${maxDaily}`, init);
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(typeof data?.error === "string" ? data.error : "Daily limit service request failed.");
+  }
+
+  return {
+    allowed: Boolean(data?.allowed),
+    limit: parsePositiveInt(data?.limit) || maxDaily,
+    remaining: Math.max(0, parseInt(data?.remaining || "0", 10))
+  };
+}
+
+function buildDailyHeaders(maxDaily, dailyRemaining) {
+  return {
+    "X-Daily-Remaining": String(Math.max(0, dailyRemaining)),
+    "X-Daily-Limit": String(maxDaily)
+  };
+}
+
 async function parseJsonResponse(response) {
   const rawText = await response.text();
   if (!rawText) return { data: null, rawText: "" };
@@ -219,6 +293,24 @@ async function parseJsonResponse(response) {
   } catch {
     return { data: null, rawText };
   }
+}
+
+function getUtcDateKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function internalJsonResponse(data, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      "Content-Type": "application/json"
+    }
+  });
+}
+
+function parsePositiveInt(value) {
+  const parsed = parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
 function extractUpstreamError(data) {
