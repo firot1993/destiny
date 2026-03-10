@@ -14,6 +14,7 @@ hint = "wnam"
 
 [vars]
 MAX_REQUESTS_PER_MINUTE = "30"
+MAX_REQUESTS_PER_DAY = "1000"
 ALLOWED_ORIGINS = "https://firot1993.github.io"
 SITE_URL = ""
 

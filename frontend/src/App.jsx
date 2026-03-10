@@ -274,6 +274,8 @@ export default function App() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [currentSample, setCurrentSample] = useState(0);
+  const [dailyRemaining, setDailyRemaining] = useState(null);
+  const [dailyLimit, setDailyLimit] = useState(null);
   const [trajectories, setTrajectories] = useState([]);
   const [allStepOutputs, setAllStepOutputs] = useState([]);
   const [error, setError] = useState(null);
@@ -300,6 +302,12 @@ export default function App() {
           messages
         })
       });
+
+      // Update daily usage from response headers
+      const remaining = res.headers.get("X-Daily-Remaining");
+      const limit = res.headers.get("X-Daily-Limit");
+      if (remaining !== null) setDailyRemaining(parseInt(remaining));
+      if (limit !== null) setDailyLimit(parseInt(limit));
 
       if (!res.ok) {
         const errText = await res.text();
@@ -610,7 +618,7 @@ export default function App() {
                 {fields.age && <span style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", ...mono }}>age:{fields.age}</span>}
                 {fields.location && <span style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", ...mono }}>loc:{fields.location}</span>}
                 <span style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", ...mono }}>big5:[{big5.join(",")}]</span>
-                <span style={{ fontSize: 12, color: "rgba(255,170,40,0.35)", ...mono }}>via:{DEFAULT_PROVIDER}</span>
+                <span style={{ fontSize: 12, color: "rgba(255,170,40,0.35)", ...mono }}>via:{provider}</span>
                 <span style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", ...mono }}>model:{model}</span>
               </div>
             </div>
@@ -650,6 +658,12 @@ export default function App() {
               }}>
               {isGenerating ? t("btn_stop") : t("btn_denoise")}
             </button>
+
+            {dailyRemaining !== null && dailyLimit !== null && (
+              <div style={{ marginTop: 12, fontSize: 10, ...mono, color: dailyRemaining < 50 ? "rgba(255,90,90,0.7)" : "rgba(255,255,255,0.25)", textAlign: "right" }}>
+                {dailyRemaining} / {dailyLimit} requests remaining today
+              </div>
+            )}
 
             {isGenerating && (
               <div style={{ marginTop: 20, animation: "fadeUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) both" }}>
