@@ -31,6 +31,25 @@ body {
   to { opacity: 1; transform: translateX(0); }
 }
 
+@keyframes signalGlitch {
+  0%, 100% { transform: translateX(0) skewX(0deg); filter: saturate(1); }
+  20% { transform: translateX(-4px) skewX(-5deg); filter: saturate(1.25); }
+  40% { transform: translateX(5px) skewX(6deg); filter: saturate(0.8); }
+  60% { transform: translateX(-3px) skewX(-4deg); filter: saturate(1.2); }
+  80% { transform: translateX(3px) skewX(3deg); filter: saturate(0.9); }
+}
+
+@keyframes signalIntrude {
+  0% { opacity: 0; transform: translateX(42px) scale(0.96); }
+  65% { opacity: 1; transform: translateX(-10px) scale(1.02); }
+  100% { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+@keyframes redStrikeFlash {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+
 /* Base interactive transitions */
 button, input[type="text"], textarea {
   transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);

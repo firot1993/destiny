@@ -344,21 +344,36 @@ function shuffleFragments(fragments) {
   return shuffled;
 }
 
-function buildMergedNoiseSeed(selectedFragments, allFragments = selectedFragments) {
+function buildMergedNoisePlan(selectedFragments, allFragments = selectedFragments) {
+  if (selectedFragments.length === 0) {
+    return { fragments: [], droppedFragment: null, wildcardFragment: null };
+  }
+
   const selectedIds = new Set(selectedFragments.map((fragment) => fragment.id));
   const unselectedFragments = allFragments.filter((fragment) => !selectedIds.has(fragment.id));
   const shuffledSelected = shuffleFragments(selectedFragments);
-  const remixedSelection = shuffledSelected.length > 1
-    ? shuffledSelected.slice(0, shuffledSelected.length - 1)
-    : shuffledSelected;
-  const wildcardFragment = unselectedFragments.length > 0
+  const shouldSwapWildcard = unselectedFragments.length > 0 && shuffledSelected.length > 0;
+  const droppedFragment = shouldSwapWildcard ? shuffledSelected[shuffledSelected.length - 1] : null;
+  const remixedSelection = shouldSwapWildcard ? shuffledSelected.slice(0, -1) : shuffledSelected;
+  const wildcardFragment = shouldSwapWildcard
     ? unselectedFragments[Math.floor(Math.random() * unselectedFragments.length)]
     : null;
   const mergedFragments = wildcardFragment
-    ? shuffleFragments([...remixedSelection, wildcardFragment])
-    : shuffledSelected;
+    ? shuffleFragments([
+      ...remixedSelection.map((fragment) => ({ ...fragment, mergeSource: "selected" })),
+      { ...wildcardFragment, mergeSource: "wildcard" }
+    ])
+    : remixedSelection.map((fragment) => ({ ...fragment, mergeSource: "selected" }));
 
-  return mergedFragments
+  return {
+    fragments: mergedFragments,
+    droppedFragment,
+    wildcardFragment
+  };
+}
+
+function buildMergedNoiseSeed(fragments) {
+  return fragments
     .map((fragment, index) => `${index + 1}::${fragment.text}`)
     .join("\n");
 }
@@ -554,10 +569,14 @@ function NoiseReviewCard({ fragment, currentIndex, totalCount, keptCount, onRemo
   );
 }
 
-function KeptSignalsPanel({ fragments }) {
+function NoiseSeedPanel({ keptFragments, mergedPlan, showMergedState = false, revealStage = "idle" }) {
   const { t } = useI18n();
+  const showMergedFragments = showMergedState && revealStage === "revealed";
+  const isGlitchStage = showMergedState && revealStage === "glitch";
+  const displayFragments = showMergedFragments ? mergedPlan?.fragments || [] : keptFragments;
+  const droppedFragmentId = mergedPlan?.droppedFragment?.id ?? null;
 
-  if (fragments.length === 0) return null;
+  if (displayFragments.length === 0) return null;
 
   return (
     <div style={{
@@ -569,24 +588,145 @@ function KeptSignalsPanel({ fragments }) {
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
         <div style={{ fontSize: 9, fontFamily: "'JetBrains Mono', monospace", color: "rgba(255,170,40,0.42)", letterSpacing: 2 }}>
-          {t("kept_signals_title")}
+          {showMergedFragments ? t("merged_seed_title") : t("kept_signals_title")}
         </div>
         <div style={{ padding: "5px 9px", borderRadius: 999, background: "rgba(255,170,40,0.08)", color: "rgba(255,170,40,0.78)", fontSize: 9, fontFamily: "'JetBrains Mono', monospace", letterSpacing: 1.2 }}>
-          {fragments.length} / {MAX_KEPT_NOISE} {t("noise_kept")}
+          {displayFragments.length} / {MAX_KEPT_NOISE} {showMergedFragments ? t("merged_signals_label") : t("noise_kept")}
         </div>
       </div>
+      {showMergedState && revealStage !== "revealed" && (
+        <div style={{
+          marginBottom: 12,
+          padding: "10px 12px",
+          borderRadius: 10,
+          background: "rgba(255,255,255,0.03)",
+          border: "1px solid rgba(255,255,255,0.06)"
+        }}>
+          <div style={{ fontSize: 10, fontFamily: "'JetBrains Mono', monospace", letterSpacing: 1.4, color: "rgba(255,255,255,0.58)" }}>
+            {t("noise_choice_locked")}
+          </div>
+        </div>
+      )}
+      {showMergedFragments && mergedPlan?.wildcardFragment && (
+        <div style={{
+          marginBottom: 12,
+          padding: "10px 12px",
+          borderRadius: 10,
+          background: "rgba(255,70,50,0.08)",
+          border: "1px solid rgba(255,70,50,0.16)"
+        }}>
+          <div style={{ fontSize: 10, fontFamily: "'JetBrains Mono', monospace", letterSpacing: 1.6, color: "rgba(255,120,120,0.9)", marginBottom: 5 }}>
+            {t("noise_system_override")}
+          </div>
+        </div>
+      )}
+      {showMergedFragments && mergedPlan?.wildcardFragment && (
+        <div style={{
+          marginBottom: 12,
+          padding: "10px 12px",
+          borderRadius: 10,
+          background: "rgba(255,170,40,0.08)",
+          border: "1px solid rgba(255,170,40,0.14)"
+        }}>
+          <div style={{ fontSize: 10, fontFamily: "'JetBrains Mono', monospace", letterSpacing: 1.4, color: "rgba(255,170,40,0.82)", marginBottom: 5 }}>
+            {t("noise_wildcard_label")}
+          </div>
+          <p className="serif" style={{ margin: 0, fontSize: 14, lineHeight: 1.65, color: "rgba(255,255,255,0.72)" }}>
+            {t("merged_seed_hint")}
+          </p>
+        </div>
+      )}
+      {showMergedFragments && mergedPlan?.droppedFragment && (
+        <div style={{ marginBottom: 12, fontSize: 11, fontFamily: "'JetBrains Mono', monospace", color: "rgba(255,255,255,0.38)", lineHeight: 1.7 }}>
+          {t("noise_dropped_label")}: {mergedPlan.droppedFragment.text}
+        </div>
+      )}
       <div style={{ display: "grid", gap: 10 }}>
-        {fragments.map((fragment, index) => (
+        {displayFragments.map((fragment, index) => (
           <div key={fragment.id} style={{
             padding: "14px 16px",
+            position: "relative",
+            overflow: "hidden",
             borderRadius: 10,
-            background: "rgba(255,170,40,0.04)",
-            border: "1px solid rgba(255,170,40,0.1)"
+            background: isGlitchStage && fragment.id === droppedFragmentId
+              ? "rgba(255,70,50,0.12)"
+              : fragment.mergeSource === "wildcard"
+                ? "rgba(255,170,40,0.1)"
+                : "rgba(255,170,40,0.04)",
+            border: `1px solid ${isGlitchStage && fragment.id === droppedFragmentId
+              ? "rgba(255,70,50,0.28)"
+              : fragment.mergeSource === "wildcard"
+                ? "rgba(255,170,40,0.28)"
+                : "rgba(255,170,40,0.1)"}`,
+            animation: isGlitchStage && fragment.id === droppedFragmentId
+              ? "signalGlitch 0.24s steps(2, end) infinite"
+              : showMergedFragments && fragment.mergeSource === "wildcard"
+                ? "signalIntrude 0.55s cubic-bezier(0.16, 1, 0.3, 1) both"
+                : "none"
           }}>
-            <div style={{ fontSize: 9, fontFamily: "'JetBrains Mono', monospace", letterSpacing: 2, color: "rgba(255,170,40,0.48)", marginBottom: 6 }}>
-              {t("noise_card_label")} {index + 1}
+            {isGlitchStage && fragment.id === droppedFragmentId && (
+              <>
+                <div style={{ position: "absolute", inset: 0, background: "rgba(255,40,40,0.08)", pointerEvents: "none" }} />
+                <div style={{
+                  position: "absolute",
+                  left: 10,
+                  right: 10,
+                  top: "50%",
+                  height: 4,
+                  borderRadius: 999,
+                  background: "rgba(255,70,50,0.92)",
+                  transform: "rotate(-5deg)",
+                  boxShadow: "0 0 14px rgba(255,70,50,0.5)",
+                  animation: "redStrikeFlash 0.45s linear infinite",
+                  pointerEvents: "none"
+                }} />
+              </>
+            )}
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 6 }}>
+              <div style={{ fontSize: 9, fontFamily: "'JetBrains Mono', monospace", letterSpacing: 2, color: "rgba(255,170,40,0.48)" }}>
+                {t("noise_card_label")} {index + 1}
+              </div>
+              {(showMergedFragments || isGlitchStage) && (
+                <div style={{
+                  padding: "4px 8px",
+                  borderRadius: 999,
+                  background: isGlitchStage && fragment.id === droppedFragmentId
+                    ? "rgba(255,70,50,0.18)"
+                    : fragment.mergeSource === "wildcard"
+                      ? "rgba(255,170,40,0.18)"
+                      : "rgba(255,255,255,0.05)",
+                  color: isGlitchStage && fragment.id === droppedFragmentId
+                    ? "rgba(255,120,120,0.9)"
+                    : fragment.mergeSource === "wildcard"
+                      ? "rgba(255,170,40,0.9)"
+                      : "rgba(255,255,255,0.55)",
+                  fontSize: 8,
+                  fontFamily: "'JetBrains Mono', monospace",
+                  letterSpacing: 1.4
+                }}>
+                  {isGlitchStage && fragment.id === droppedFragmentId
+                    ? t("noise_dropped_label")
+                    : fragment.mergeSource === "wildcard"
+                      ? t("noise_wildcard_label")
+                      : t("noise_selected_label")}
+                </div>
+              )}
             </div>
-            <p className="serif" style={{ margin: 0, fontSize: 15, lineHeight: 1.7, color: "rgba(255,255,255,0.84)", fontStyle: "italic" }}>
+            {showMergedFragments && fragment.mergeSource === "wildcard" && (
+              <div style={{ fontSize: 10, fontFamily: "'JetBrains Mono', monospace", letterSpacing: 1.3, color: "rgba(255,170,40,0.72)", marginBottom: 8 }}>
+                {t("noise_wildcard_hint")}
+              </div>
+            )}
+            <p className="serif" style={{
+              margin: 0,
+              fontSize: 15,
+              lineHeight: 1.7,
+              color: isGlitchStage && fragment.id === droppedFragmentId ? "rgba(255,210,210,0.88)" : "rgba(255,255,255,0.84)",
+              fontStyle: "italic",
+              textDecoration: isGlitchStage && fragment.id === droppedFragmentId ? "line-through" : "none",
+              textDecorationColor: "rgba(255,70,50,0.92)",
+              textDecorationThickness: 3
+            }}>
               {fragment.text}
             </p>
           </div>
@@ -615,6 +755,8 @@ export default function App() {
   const [noiseFragments, setNoiseFragments] = useState([]);
   const [currentNoiseIndex, setCurrentNoiseIndex] = useState(0);
   const [keptNoiseFragments, setKeptNoiseFragments] = useState([]);
+  const [mergedNoisePlan, setMergedNoisePlan] = useState(null);
+  const [mergeRevealStage, setMergeRevealStage] = useState("idle");
   const [dailyRemaining, setDailyRemaining] = useState(null);
   const [dailyLimit, setDailyLimit] = useState(null);
   const [dailyUsageDate, setDailyUsageDate] = useState(() => getUtcDateKey());
@@ -639,6 +781,7 @@ export default function App() {
       : "scan";
   const canRemoveCurrentNoise = Boolean(currentNoiseFragment);
   const canKeepCurrentNoise = Boolean(currentNoiseFragment) && keepSlotsLeft > 0;
+  const isMergeRevealPending = runPhase === "ready" && mergedNoisePlan && mergeRevealStage !== "revealed";
 
   useEffect(() => {
     const today = getUtcDateKey();
@@ -654,6 +797,29 @@ export default function App() {
     setDailyRemaining(snapshot.remaining);
     setDailyLimit(snapshot.limit);
   }, [apiUrl]);
+
+  useEffect(() => {
+    if (!mergedNoisePlan) {
+      setMergeRevealStage("idle");
+      return;
+    }
+
+    if (runPhase !== "ready") {
+      if (runPhase === "idle" || runPhase === "reviewing" || runPhase === "scanning") {
+        setMergeRevealStage("idle");
+      }
+      return;
+    }
+
+    setMergeRevealStage("holding");
+    const glitchTimer = window.setTimeout(() => setMergeRevealStage("glitch"), 2400);
+    const revealTimer = window.setTimeout(() => setMergeRevealStage("revealed"), 3200);
+
+    return () => {
+      window.clearTimeout(glitchTimer);
+      window.clearTimeout(revealTimer);
+    };
+  }, [runPhase, mergedNoisePlan]);
 
   const callModel = async (messages, temperature = 1.0, { provider: overrideProvider, model: overrideModel } = {}) => {
     const endpoint = normalizeApiEndpoint(apiUrl);
@@ -726,6 +892,13 @@ export default function App() {
     setAllStepOutputs([]);
   };
 
+  const lockNoiseSelection = (selectedFragments, nextNoiseIndex) => {
+    setKeptNoiseFragments(selectedFragments);
+    setMergedNoisePlan(buildMergedNoisePlan(selectedFragments, noiseFragments));
+    setCurrentNoiseIndex(nextNoiseIndex);
+    setRunPhase("ready");
+  };
+
   const decideCurrentNoise = (decision) => {
     if (isGenerating || !currentNoiseFragment) return;
 
@@ -738,23 +911,25 @@ export default function App() {
     const removedAfterDecision = nextNoiseIndex - nextKeptNoise.length;
 
     if (nextKeptNoise.length >= MAX_KEPT_NOISE) {
-      setKeptNoiseFragments(nextKeptNoise);
-      setCurrentNoiseIndex(nextNoiseIndex);
-      setRunPhase("ready");
+      lockNoiseSelection(nextKeptNoise, nextNoiseIndex);
       return;
     }
 
     if (removedAfterDecision >= MAX_REMOVED_NOISE) {
       const remainingNoise = noiseFragments.slice(nextNoiseIndex);
-      setKeptNoiseFragments([...nextKeptNoise, ...remainingNoise]);
-      setCurrentNoiseIndex(noiseFragments.length);
-      setRunPhase("ready");
+      lockNoiseSelection([...nextKeptNoise, ...remainingNoise], noiseFragments.length);
       return;
     }
 
     setKeptNoiseFragments(nextKeptNoise);
+    setMergedNoisePlan(null);
     setCurrentNoiseIndex(nextNoiseIndex);
-    setRunPhase(nextNoiseIndex >= noiseFragments.length ? "ready" : "reviewing");
+    if (nextNoiseIndex >= noiseFragments.length) {
+      lockNoiseSelection(nextKeptNoise, nextNoiseIndex);
+      return;
+    }
+
+    setRunPhase("reviewing");
   };
 
   const scanNoiseFragments = async () => {
@@ -766,6 +941,8 @@ export default function App() {
     setRunPhase("scanning");
     setNoiseFragments([]);
     setKeptNoiseFragments([]);
+    setMergedNoisePlan(null);
+    setMergeRevealStage("idle");
     setCurrentNoiseIndex(0);
     clearDenoisedOutputs();
     setError(null);
@@ -806,7 +983,8 @@ export default function App() {
     generationLockRef.current = true;
 
     const stateStr = buildStateString(fields, big5, t);
-    const mergedNoiseSeed = buildMergedNoiseSeed(keptNoiseFragments, noiseFragments);
+    const activeMergedNoisePlan = mergedNoisePlan || buildMergedNoisePlan(keptNoiseFragments, noiseFragments);
+    const mergedNoiseSeed = buildMergedNoiseSeed(activeMergedNoisePlan.fragments);
     setIsGenerating(true);
     setRunPhase("denoising");
     clearDenoisedOutputs();
@@ -1165,16 +1343,21 @@ export default function App() {
                   </div>
                 </div>
                 <p className="serif" style={{ margin: 0, fontSize: 15, lineHeight: 1.75, color: "rgba(255,255,255,0.62)" }}>
-                  {t("noise_ready_hint")}
+                  {isMergeRevealPending ? t("noise_choice_locked") : t("noise_ready_hint")}
                 </p>
               </div>
             )}
 
-            <KeptSignalsPanel fragments={keptNoiseFragments} />
+            <NoiseSeedPanel
+              keptFragments={keptNoiseFragments}
+              mergedPlan={mergedNoisePlan}
+              showMergedState={!currentNoiseFragment && noiseFragments.length > 0}
+              revealStage={mergeRevealStage}
+            />
 
             {!currentNoiseFragment && (
               <button onClick={isGenerating ? () => { abortRef.current = true; } : noiseFragments.length > 0 ? denoiseSelectedNoise : scanNoiseFragments}
-              disabled={(!apiUrl && !isGenerating) || (!isGenerating && noiseFragments.length > 0 && keptNoiseFragments.length === 0)}
+              disabled={(!apiUrl && !isGenerating) || (!isGenerating && noiseFragments.length > 0 && keptNoiseFragments.length === 0) || (!isGenerating && isMergeRevealPending)}
               style={{
                 width: "100%", padding: "18px 0",
                 background: isGenerating ? "rgba(255,70,50,0.12)" : "rgba(255,170,40,0.1)",
@@ -1182,9 +1365,9 @@ export default function App() {
                 borderRadius: 10, cursor: "pointer",
                 color: isGenerating ? "rgba(255,70,50,0.85)" : "rgba(255,170,40,0.85)",
                 fontSize: 12, ...mono, fontWeight: 600, letterSpacing: 3, transition: "all 0.3s ease",
-                opacity: ((!apiUrl && !isGenerating) || (!isGenerating && noiseFragments.length > 0 && keptNoiseFragments.length === 0)) ? 0.3 : 1
+                opacity: ((!apiUrl && !isGenerating) || (!isGenerating && noiseFragments.length > 0 && keptNoiseFragments.length === 0) || (!isGenerating && isMergeRevealPending)) ? 0.3 : 1
               }}>
-              {isGenerating ? t("btn_stop") : noiseFragments.length > 0 ? t("btn_denoise_merged") : t("btn_scan_noise")}
+              {isGenerating ? t("btn_stop") : isMergeRevealPending ? t("btn_preparing_merge") : noiseFragments.length > 0 ? t("btn_denoise_merged") : t("btn_scan_noise")}
             </button>
             )}
 
