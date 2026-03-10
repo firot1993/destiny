@@ -18,7 +18,7 @@ export default {
       return jsonResponse({ error: "Forbidden" }, 403, env);
     }
 
-    // Simple rate limiting via CF headers
+    // Per-IP rate limiting (per minute)
     const ip = request.headers.get("CF-Connecting-IP") || "unknown";
     const rateLimitKey = `rl:${ip}`;
     const currentCount = parseInt(await env.RATE_LIMIT?.get(rateLimitKey) || "0");
@@ -31,6 +31,28 @@ export default {
     if (env.RATE_LIMIT) {
       await env.RATE_LIMIT.put(rateLimitKey, String(currentCount + 1), { expirationTtl: 60 });
     }
+
+    // Global daily request limit
+    const maxDaily = parseInt(env.MAX_REQUESTS_PER_DAY || "1000");
+    let dailyRemaining = maxDaily;
+
+    if (env.RATE_LIMIT) {
+      const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+      const dailyKey = `daily:${today}`;
+      const dailyCount = parseInt(await env.RATE_LIMIT.get(dailyKey) || "0");
+
+      if (dailyCount >= maxDaily) {
+        return jsonResponse({ error: "Daily request limit reached. Try again tomorrow." }, 429, env);
+      }
+
+      await env.RATE_LIMIT.put(dailyKey, String(dailyCount + 1), { expirationTtl: 86400 });
+      dailyRemaining = maxDaily - dailyCount - 1;
+    }
+
+    const dailyHeaders = {
+      "X-Daily-Remaining": String(dailyRemaining),
+      "X-Daily-Limit": String(maxDaily)
+    };
 
     try {
       const body = await request.json();
@@ -115,7 +137,7 @@ export default {
       if (!apiRes.ok) {
         return jsonResponse({
           error: extractUpstreamError(data) || rawText.slice(0, 300) || `Upstream API error (${apiRes.status})`
-        }, apiRes.status, env);
+        }, apiRes.status, env, dailyHeaders);
       }
 
       // Normalize Gemini response to Anthropic format
@@ -124,12 +146,12 @@ export default {
         if (!text) {
           return jsonResponse({
             error: extractUpstreamError(data) || "Upstream API returned no text content."
-          }, 502, env);
+          }, 502, env, dailyHeaders);
         }
 
         return jsonResponse({
           content: [{ type: "text", text }]
-        }, 200, env);
+        }, 200, env, dailyHeaders);
       }
 
       // Normalize xAI response to Anthropic format (OpenAI-compatible)
@@ -138,12 +160,12 @@ export default {
         if (!text) {
           return jsonResponse({
             error: extractUpstreamError(data) || "Upstream API returned no text content."
-          }, 502, env);
+          }, 502, env, dailyHeaders);
         }
 
         return jsonResponse({
           content: [{ type: "text", text }]
-        }, 200, env);
+        }, 200, env, dailyHeaders);
       }
 
       // Normalize OpenRouter response to Anthropic format
@@ -152,36 +174,38 @@ export default {
         if (!text) {
           return jsonResponse({
             error: extractUpstreamError(data) || "Upstream API returned no text content."
-          }, 502, env);
+          }, 502, env, dailyHeaders);
         }
 
         return jsonResponse({
           content: [{ type: "text", text }]
-        }, 200, env);
+        }, 200, env, dailyHeaders);
       }
 
-      return jsonResponse(data, apiRes.status, env);
+      return jsonResponse(data, apiRes.status, env, dailyHeaders);
 
     } catch (err) {
-      return jsonResponse({ error: err.message }, 500, env);
+      return jsonResponse({ error: err.message }, 500, env, dailyHeaders);
     }
   }
 };
 
-function corsHeaders(env) {
+function corsHeaders() {
   return {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "Content-Type",
-    "Access-Control-Allow-Methods": "POST, OPTIONS"
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Expose-Headers": "X-Daily-Remaining, X-Daily-Limit"
   };
 }
 
-function jsonResponse(data, status, env) {
+function jsonResponse(data, status, env, extraHeaders) {
   return new Response(JSON.stringify(data), {
     status,
     headers: {
       "Content-Type": "application/json",
-      ...corsHeaders(env)
+      ...corsHeaders(),
+      ...extraHeaders
     }
   });
 }
