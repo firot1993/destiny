@@ -39,7 +39,37 @@ export default {
 
       let apiUrl, headers, apiBody;
 
-      if (provider === "openrouter") {
+      if (provider === "gemini") {
+        const model = body.model || "gemini-3-flash-preview";
+        apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+        apiBody = JSON.stringify({
+          contents: (body.messages || []).map(m => ({
+            role: m.role === "assistant" ? "model" : "user",
+            parts: [{ text: m.content }]
+          })),
+          tools: [{ google_search: {} }]
+        });
+        headers = {
+          "Content-Type": "application/json",
+          "x-goog-api-key": env.GOOGLE_API_KEY
+        };
+      } else if (provider === "xai") {
+        apiUrl = "https://api.x.ai/v1/chat/completions";
+        const messages = (body.messages || []).map(m => ({
+          role: m.role,
+          content: m.content
+        }));
+        apiBody = JSON.stringify({
+          model: body.model || "grok-4-1-fast-non-reasoning",
+          max_tokens: body.max_tokens || 1000,
+          temperature: body.temperature ?? 1.0,
+          messages
+        });
+        headers = {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${env.XAI_API_KEY}`
+        };
+      } else if (provider === "openrouter") {
         apiUrl = "https://openrouter.ai/api/v1/chat/completions";
         // Map Anthropic format → OpenAI format for OpenRouter
         const messages = (body.messages || []).map(m => ({
@@ -86,6 +116,34 @@ export default {
         return jsonResponse({
           error: extractUpstreamError(data) || rawText.slice(0, 300) || `Upstream API error (${apiRes.status})`
         }, apiRes.status, env);
+      }
+
+      // Normalize Gemini response to Anthropic format
+      if (provider === "gemini") {
+        const text = extractGeminiText(data);
+        if (!text) {
+          return jsonResponse({
+            error: extractUpstreamError(data) || "Upstream API returned no text content."
+          }, 502, env);
+        }
+
+        return jsonResponse({
+          content: [{ type: "text", text }]
+        }, 200, env);
+      }
+
+      // Normalize xAI response to Anthropic format (OpenAI-compatible)
+      if (provider === "xai") {
+        const text = extractOpenRouterText(data);
+        if (!text) {
+          return jsonResponse({
+            error: extractUpstreamError(data) || "Upstream API returned no text content."
+          }, 502, env);
+        }
+
+        return jsonResponse({
+          content: [{ type: "text", text }]
+        }, 200, env);
       }
 
       // Normalize OpenRouter response to Anthropic format
@@ -145,6 +203,16 @@ function extractUpstreamError(data) {
   if (typeof data.message === "string") return data.message;
   if (typeof data.error?.message === "string") return data.error.message;
   return "";
+}
+
+function extractGeminiText(data) {
+  const parts = data?.candidates?.[0]?.content?.parts;
+  if (!Array.isArray(parts)) return "";
+  return parts
+    .filter(p => typeof p.text === "string")
+    .map(p => p.text)
+    .join("\n")
+    .trim();
 }
 
 function extractOpenRouterText(data) {

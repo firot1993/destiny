@@ -4,10 +4,17 @@ import { useI18n } from "./i18n";
 // ─── Config ───────────────────────────────────────────────
 const DEFAULT_API_URL = import.meta.env.VITE_API_URL || "";
 const DEFAULT_PROVIDER = "openrouter";
-const OPENROUTER_MODELS = [
-  "anthropic/claude-sonnet-4.6",
-  "openai/gpt-5.4",
-];
+const PROVIDERS = {
+  openrouter: [
+    "anthropic/claude-sonnet-4.6",
+    "openai/gpt-5.4",
+  ],
+  xai: [
+    "grok-4.20-experimental-beta-0304-reasoning",
+    "grok-4.20-multi-agent-experimental-beta-0304",
+    "grok-4-1-fast-reasoning"
+  ],
+};
 
 const BIG5_KEYS = ["openness", "conscientiousness", "extraversion", "agreeableness", "neuroticism"];
 const BIG5_ICONS = ["◈", "◉", "◎", "◇", "◆"];
@@ -261,7 +268,8 @@ export default function App() {
   const [guidance, setGuidance] = useState(7);
   const [numSamples, setNumSamples] = useState(3);
   const [denoiseSteps, setDenoiseSteps] = useState(4);
-  const [model, setModel] = useState(OPENROUTER_MODELS[0]);
+  const [provider, setProvider] = useState(DEFAULT_PROVIDER);
+  const [model, setModel] = useState(PROVIDERS[DEFAULT_PROVIDER][0]);
   const [apiUrl, setApiUrl] = useState(DEFAULT_API_URL);
   const [isGenerating, setIsGenerating] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
@@ -276,7 +284,7 @@ export default function App() {
   const updateBig5 = (idx, val) => setBig5(b => { const n = [...b]; n[idx] = val; return n; });
   const hasMinInput = fields.age || fields.skills || fields.obsessions;
 
-  const callModel = async (messages, temperature = 1.0) => {
+  const callModel = async (messages, temperature = 1.0, { provider: overrideProvider, model: overrideModel } = {}) => {
     const endpoint = apiUrl.replace(/\/$/, "");
     if (!endpoint) throw new Error("API endpoint not configured. Open Settings to set your worker URL.");
 
@@ -285,8 +293,8 @@ export default function App() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          provider: DEFAULT_PROVIDER,
-          model,
+          provider: overrideProvider || provider,
+          model: overrideModel || model,
           max_tokens: 1000,
           temperature,
           messages
@@ -344,7 +352,9 @@ export default function App() {
           setCurrentStep(step);
           const msg = generateStepPrompt(step, denoiseSteps, stateStr, guidance, step > 0 ? stepResults[step - 1] : null, previousSketches);
           const temp = Math.min(1.0 + s * 0.15, 1.6);
-          const result = await callModel([msg], temp);
+          const result = step === 0
+            ? await callModel([msg], temp, { provider: "gemini" })
+            : await callModel([msg], temp);
           stepResults.push(result);
           if (step === 0) previousSketches.push(result);
         }
@@ -433,24 +443,34 @@ export default function App() {
 
             <div>
               <label style={label}>{t("provider_label")}</label>
-              <div style={{
-                padding: "12px 14px",
-                background: "rgba(255,170,40,0.08)",
-                border: "1px solid rgba(255,170,40,0.18)",
-                borderRadius: 8,
-                color: "rgba(255,170,40,0.85)",
-                fontSize: 11,
-                ...mono,
-                letterSpacing: 1
-              }}>
-                {t("provider_openrouter")}
+              <div style={{ display: "grid", gap: 8 }}>
+                {Object.keys(PROVIDERS).map((p) => (
+                  <button key={p} onClick={() => { setProvider(p); setModel(PROVIDERS[p][0]); }} style={{
+                    width: "100%",
+                    padding: "12px 14px",
+                    textAlign: "left",
+                    background: provider === p ? "rgba(255,170,40,0.1)" : "rgba(255,255,255,0.02)",
+                    border: `1px solid ${provider === p ? "rgba(255,170,40,0.25)" : "rgba(255,255,255,0.06)"}`,
+                    borderRadius: 8,
+                    cursor: "pointer",
+                    color: provider === p ? "rgba(255,170,40,0.88)" : "rgba(255,255,255,0.45)",
+                    fontSize: 11,
+                    ...mono,
+                    letterSpacing: 1
+                  }}>
+                    {p}
+                  </button>
+                ))}
+              </div>
+              <div style={{ marginTop: 6, fontSize: 10, color: "rgba(255,255,255,0.3)", ...mono }}>
+                Step 1 always uses Gemini + Google Search
               </div>
             </div>
 
             <div style={{ marginTop: 16 }}>
               <label style={label}>{t("model_label")}</label>
               <div style={{ display: "grid", gap: 8 }}>
-                {OPENROUTER_MODELS.map((modelOption) => (
+                {PROVIDERS[provider].map((modelOption) => (
                   <button key={modelOption} onClick={() => setModel(modelOption)} style={{
                     width: "100%",
                     padding: "12px 14px",
