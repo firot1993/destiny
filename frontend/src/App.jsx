@@ -333,8 +333,32 @@ function parseNoiseFragments(rawText) {
     .slice(0, NOISE_SCAN_COUNT);
 }
 
-function buildMergedNoiseSeed(fragments) {
-  return fragments
+function shuffleFragments(fragments) {
+  const shuffled = [...fragments];
+
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+  }
+
+  return shuffled;
+}
+
+function buildMergedNoiseSeed(selectedFragments, allFragments = selectedFragments) {
+  const selectedIds = new Set(selectedFragments.map((fragment) => fragment.id));
+  const unselectedFragments = allFragments.filter((fragment) => !selectedIds.has(fragment.id));
+  const shuffledSelected = shuffleFragments(selectedFragments);
+  const remixedSelection = shuffledSelected.length > 1
+    ? shuffledSelected.slice(0, shuffledSelected.length - 1)
+    : shuffledSelected;
+  const wildcardFragment = unselectedFragments.length > 0
+    ? unselectedFragments[Math.floor(Math.random() * unselectedFragments.length)]
+    : null;
+  const mergedFragments = wildcardFragment
+    ? shuffleFragments([...remixedSelection, wildcardFragment])
+    : shuffledSelected;
+
+  return mergedFragments
     .map((fragment, index) => `${index + 1}::${fragment.text}`)
     .join("\n");
 }
@@ -782,7 +806,7 @@ export default function App() {
     generationLockRef.current = true;
 
     const stateStr = buildStateString(fields, big5, t);
-    const mergedNoiseSeed = buildMergedNoiseSeed(keptNoiseFragments);
+    const mergedNoiseSeed = buildMergedNoiseSeed(keptNoiseFragments, noiseFragments);
     setIsGenerating(true);
     setRunPhase("denoising");
     clearDenoisedOutputs();
