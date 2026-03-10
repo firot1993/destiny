@@ -361,7 +361,7 @@ export default function App() {
           const msg = generateStepPrompt(step, denoiseSteps, stateStr, guidance, step > 0 ? stepResults[step - 1] : null, previousSketches);
           const temp = Math.min(1.0 + s * 0.15, 1.6);
           const result = step === 0
-            ? await callModel([msg], temp, { provider: "gemini" })
+            ? await callModel([msg], temp, { provider: "gemini", model: "gemini-3-flash-preview" })
             : await callModel([msg], temp);
           stepResults.push(result);
           if (step === 0) previousSketches.push(result);
