@@ -28,6 +28,9 @@ const INPUT_FIELDS = [
   { key: "obsessions", type: "long" },
 ];
 
+const NOISE_SCAN_COUNT = 10;
+const MAX_NOISE_REMOVALS = 5;
+const MIN_KEPT_NOISE = NOISE_SCAN_COUNT - MAX_NOISE_REMOVALS;
 const DAILY_USAGE_STORAGE_PREFIX = "destiny-daily-usage";
 
 function normalizeApiEndpoint(url) {
@@ -142,34 +145,46 @@ function buildStateString(fields, big5, t) {
 
 const LANG_NAMES = { en: "English", zh: "Chinese (简体中文)", ja: "Japanese", ko: "Korean" };
 
-function generateStepPrompt(step, totalSteps, state, guidance, prev, previousSketches = [], lang = "en") {
+function generateStepPrompt(step, totalSteps, state, guidance, prev, lang = "en") {
   const langInstruction = lang !== "en" ? `\n\nIMPORTANT: Respond entirely in ${LANG_NAMES[lang] || lang}.` : "";
   const progress = step / (totalSteps - 1);
   const guidanceDesc = guidance >= 7 ? "dramatic pivots, unexpected breakthroughs, biography-worthy" : guidance >= 4 ? "ambitious but grounded, notable achievements" : "meaningful, well-lived, not flashy";
   const personality = "The person's Big Five personality traits should deeply shape the trajectory. High openness = unconventional pivots. High conscientiousness = systematic empire-building. High extraversion = network-driven success. Low agreeableness = disruptive moves. High neuroticism = intense creative or emotional breakthroughs.";
 
-  const variationDirective = previousSketches.length > 0
-    ? `\n\nCRITICAL: The following trajectories were ALREADY generated. You MUST produce something COMPLETELY DIFFERENT — different life domain, industry, archetype, tone, and turning-point structure. Do NOT repeat similar themes or career arcs.\n\nALREADY GENERATED:\n${previousSketches.map((sk, i) => `--- Sample ${i + 1} ---\n${sk}`).join("\n")}`
-    : "";
-
-  if (step === 0) {
-    return {
-      role: "user",
-      content: `You are a Life Trajectory Diffusion Model. You generate possible extraordinary life paths.
+if (step === 0) {
+  return {
+    role: "user",
+    content: `You are a Life Trajectory Diffusion Model scanning the latent space of possible futures.
 
 CURRENT STATE OF THE PERSON:
 ${state}
 
-GUIDANCE SCALE: ${guidance}/10 (1 = plausible ordinary life, 10 = biography-worthy phenomenal trajectory)
+GUIDANCE SCALE: ${guidance}/10
+PERSONALITY: ${personality}
 
-IMPORTANT: ${personality}
+STEP 0: LATENT SPACE SCAN
+Generate exactly 10 raw signal fragments from this person's possible futures. These are NOT predictions, NOT plans, NOT advice. They are flickers — glimpses caught from a dream before it dissolves.
 
-STEP 1 of ${totalSteps}: NOISY SKETCH
-Generate a very rough, noisy sketch of a possible life trajectory. Vague, fragmented — just hints. Like a diffusion model at high noise. ${totalSteps <= 3 ? "4-5" : "3-4"} short fragmented phrases. No full sentences. Signal emerging from noise.${variationDirective}
+Rules:
+- Each fragment is 5-15 words max
+- Standalone images, sensations, or moments — not a sequence
+- Mix of tones: some bright, some dark, some strange, some quiet
+- Fragments can contradict each other — that's expected
+- No explanations, no context, no connecting words between them
+- Abstract enough to be interpreted multiple ways, concrete enough to provoke a feeling
+- Personality shapes the texture: ${guidance >= 7 ? "dramatic, vivid, high contrast" : guidance >= 4 ? "grounded but charged with potential" : "quiet, intimate, small but meaningful"}
 
-Respond with ONLY the trajectory sketch, nothing else.${langInstruction}`
-    };
-  }
+Think tarot imagery, not life coaching.
+
+Format: exactly 10 lines, each as NUMBER::FRAGMENT
+Example format:
+1::a room where everyone finally stops pretending
+2::something you buried starts growing back
+
+Respond with ONLY the 10 numbered fragments, nothing else.${langInstruction}`
+  };
+}
+
 
   if (step === totalSteps - 1) {
     return {
@@ -278,6 +293,22 @@ function extractNormalizedText(contentBlocks) {
     .trim();
 }
 
+function parseNoiseFragments(rawText) {
+  return rawText
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const numbered = line.match(/^\s*\d+\s*::\s*(.+)$/);
+      if (numbered) return numbered[1].trim();
+
+      const fallback = line.match(/^\s*\d+[\.\):-]\s*(.+)$/);
+      return fallback ? fallback[1].trim() : line;
+    })
+    .filter(Boolean)
+    .slice(0, NOISE_SCAN_COUNT);
+}
+
 // ─── Components ───────────────────────────────────────────
 function StepIndicator({ currentStep, totalSteps, isGenerating }) {
   const { t } = useI18n();
@@ -314,7 +345,7 @@ function TrajectoryCard({ trajectory, index, stepOutputs, totalSteps }) {
       borderRadius: 14, padding: 28, marginBottom: 16, position: "relative", animation: "fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1)"
     }}>
       <div style={{ position: "absolute", top: 16, right: 20, fontSize: 11, fontFamily: "'JetBrains Mono', monospace", color: "rgba(255,170,40,0.6)", letterSpacing: 2, fontWeight: 600 }}>
-        {t("sample_of")} {index + 1}
+        {t("trajectory_label")} {index + 1}
       </div>
       <p className="serif" style={{ color: "#fff", fontSize: 16, lineHeight: 1.85, margin: 0, paddingRight: 60 }}>{trajectory}</p>
       {stepOutputs && stepOutputs.length > 0 && (
@@ -354,6 +385,89 @@ function TrajectoryCard({ trajectory, index, stepOutputs, totalSteps }) {
   );
 }
 
+function WorkflowRail({ stage }) {
+  const { t } = useI18n();
+  const steps = [
+    { id: "scan", label: t("workflow_scan") },
+    { id: "curate", label: t("workflow_curate") },
+    { id: "denoise", label: t("workflow_denoise") }
+  ];
+  const activeIndex = steps.findIndex((item) => item.id === stage);
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 24 }}>
+      {steps.map((item, index) => {
+        const isActive = index === activeIndex;
+        const isComplete = index < activeIndex;
+
+        return (
+          <div key={item.id} style={{
+            padding: "12px 14px",
+            borderRadius: 10,
+            border: `1px solid ${isActive ? "rgba(255,170,40,0.28)" : isComplete ? "rgba(255,170,40,0.14)" : "rgba(255,255,255,0.06)"}`,
+            background: isActive ? "rgba(255,170,40,0.08)" : isComplete ? "rgba(255,170,40,0.04)" : "rgba(255,255,255,0.02)"
+          }}>
+            <div style={{ fontSize: 9, fontFamily: "'JetBrains Mono', monospace", letterSpacing: 2, color: isActive ? "rgba(255,170,40,0.82)" : isComplete ? "rgba(255,170,40,0.48)" : "rgba(255,255,255,0.2)" }}>
+              0{index + 1}
+            </div>
+            <div style={{ marginTop: 6, fontSize: 11, fontFamily: "'JetBrains Mono', monospace", letterSpacing: 1.6, color: isActive ? "rgba(255,255,255,0.88)" : "rgba(255,255,255,0.34)" }}>
+              {item.label}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function NoiseCard({ fragment, onToggle, disableRemove, isBusy }) {
+  const { t } = useI18n();
+  const isRemoved = fragment.removed;
+
+  return (
+    <div style={{
+      padding: "18px 18px 16px",
+      borderRadius: 12,
+      border: `1px solid ${isRemoved ? "rgba(255,90,90,0.16)" : "rgba(255,255,255,0.08)"}`,
+      background: isRemoved ? "rgba(255,70,50,0.04)" : "rgba(255,255,255,0.025)",
+      opacity: isRemoved ? 0.45 : 1,
+      transition: "all 0.3s ease"
+    }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 14 }}>
+        <div style={{ fontSize: 10, fontFamily: "'JetBrains Mono', monospace", letterSpacing: 2, color: isRemoved ? "rgba(255,120,120,0.5)" : "rgba(255,170,40,0.62)" }}>
+          #{fragment.id}
+        </div>
+        <button
+          onClick={() => onToggle(fragment.id)}
+          disabled={isBusy || (!isRemoved && disableRemove)}
+          style={{
+            padding: "6px 10px",
+            borderRadius: 999,
+            border: `1px solid ${isRemoved ? "rgba(255,255,255,0.08)" : "rgba(255,90,90,0.18)"}`,
+            background: isRemoved ? "rgba(255,255,255,0.04)" : "rgba(255,70,50,0.08)",
+            color: isRemoved ? "rgba(255,255,255,0.52)" : "rgba(255,120,120,0.82)",
+            fontSize: 9,
+            fontFamily: "'JetBrains Mono', monospace",
+            letterSpacing: 1.4,
+            cursor: isBusy ? "default" : "pointer"
+          }}
+        >
+          {isRemoved ? t("noise_restore") : t("noise_remove")}
+        </button>
+      </div>
+      <p className="serif" style={{
+        margin: 0,
+        fontSize: 15,
+        lineHeight: 1.7,
+        color: isRemoved ? "rgba(255,255,255,0.36)" : "rgba(255,255,255,0.86)",
+        fontStyle: "italic"
+      }}>
+        {fragment.text}
+      </p>
+    </div>
+  );
+}
+
 // ─── Main App ─────────────────────────────────────────────
 export default function App() {
   const { t, lang, toggleLang } = useI18n();
@@ -363,14 +477,15 @@ export default function App() {
   const [fields, setFields] = useState({ age: "", location: "", skills: "", resources: "", constraints: "", obsessions: "" });
   const [big5, setBig5] = useState([5, 5, 5, 5, 5]);
   const [guidance, setGuidance] = useState(7);
-  const [numSamples, setNumSamples] = useState(3);
   const [denoiseSteps, setDenoiseSteps] = useState(4);
   const [provider, setProvider] = useState(DEFAULT_PROVIDER);
   const [model, setModel] = useState(PROVIDERS[DEFAULT_PROVIDER][0]);
   const [apiUrl, setApiUrl] = useState(DEFAULT_API_URL);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [runPhase, setRunPhase] = useState("idle");
   const [currentStep, setCurrentStep] = useState(0);
-  const [currentSample, setCurrentSample] = useState(0);
+  const [currentTrajectory, setCurrentTrajectory] = useState(0);
+  const [noiseFragments, setNoiseFragments] = useState([]);
   const [dailyRemaining, setDailyRemaining] = useState(null);
   const [dailyLimit, setDailyLimit] = useState(null);
   const [dailyUsageDate, setDailyUsageDate] = useState(() => getUtcDateKey());
@@ -383,6 +498,17 @@ export default function App() {
   const updateField = (key, val) => setFields(f => ({ ...f, [key]: val }));
   const updateBig5 = (idx, val) => setBig5(b => { const n = [...b]; n[idx] = val; return n; });
   const hasMinInput = fields.age || fields.skills || fields.obsessions;
+  const removedNoiseCount = noiseFragments.filter((fragment) => fragment.removed).length;
+  const keptNoiseFragments = noiseFragments.filter((fragment) => !fragment.removed);
+  const workflowStage = runPhase === "scanning"
+    ? "scan"
+    : runPhase === "denoising" || trajectories.length > 0
+      ? "denoise"
+      : noiseFragments.length > 0
+        ? "curate"
+        : "scan";
+  const canRemoveMoreNoise = removedNoiseCount < MAX_NOISE_REMOVALS;
+  const canDenoiseSelectedNoise = keptNoiseFragments.length >= MIN_KEPT_NOISE;
 
   useEffect(() => {
     const today = getUtcDateKey();
@@ -465,39 +591,110 @@ export default function App() {
     }
   };
 
-  const generate = async () => {
+  const clearDenoisedOutputs = () => {
+    setTrajectories([]);
+    setAllStepOutputs([]);
+  };
+
+  const toggleNoiseFragment = (fragmentId) => {
+    if (isGenerating) return;
+
+    setError(null);
+    setRunPhase("review");
+    clearDenoisedOutputs();
+    setNoiseFragments((current) => {
+      const fragment = current.find((item) => item.id === fragmentId);
+      if (!fragment) return current;
+
+      const nextRemovedCount = current.filter((item) => item.removed).length;
+      if (!fragment.removed && nextRemovedCount >= MAX_NOISE_REMOVALS) return current;
+
+      return current.map((item) => item.id === fragmentId ? { ...item, removed: !item.removed } : item);
+    });
+  };
+
+  const scanNoiseFragments = async () => {
     if (generationLockRef.current) return;
     generationLockRef.current = true;
 
     const stateStr = buildStateString(fields, big5, t);
     setIsGenerating(true);
-    setTrajectories([]);
-    setAllStepOutputs([]);
+    setRunPhase("scanning");
+    setNoiseFragments([]);
+    clearDenoisedOutputs();
+    setError(null);
+    abortRef.current = false;
+    setCurrentStep(0);
+    setCurrentTrajectory(0);
+
+    try {
+      const msg = generateStepPrompt(0, denoiseSteps, stateStr, guidance, null, lang);
+      const rawNoise = await callModel([msg], 1.15);
+
+      if (abortRef.current) {
+        setRunPhase("idle");
+        return;
+      }
+
+      const parsedNoise = parseNoiseFragments(rawNoise);
+      if (parsedNoise.length < MIN_KEPT_NOISE) {
+        throw new Error(`Noise scan returned only ${parsedNoise.length} usable fragments.`);
+      }
+
+      setNoiseFragments(parsedNoise.map((text, index) => ({
+        id: index + 1,
+        text,
+        removed: false
+      })));
+      setRunPhase("review");
+    } catch (e) {
+      setError(e.message);
+      setRunPhase("idle");
+    } finally {
+      generationLockRef.current = false;
+      setIsGenerating(false);
+      setCurrentStep(0);
+    }
+  };
+
+  const denoiseSelectedNoise = async () => {
+    if (generationLockRef.current || !canDenoiseSelectedNoise) return;
+    generationLockRef.current = true;
+
+    const stateStr = buildStateString(fields, big5, t);
+    const activeNoiseFragments = keptNoiseFragments;
+    setIsGenerating(true);
+    setRunPhase("denoising");
+    clearDenoisedOutputs();
     setError(null);
     abortRef.current = false;
 
     try {
-      const previousSketches = [];
-      for (let s = 0; s < numSamples; s++) {
+      for (let s = 0; s < activeNoiseFragments.length; s++) {
         if (abortRef.current) break;
-        setCurrentSample(s);
-        let stepResults = [];
-        for (let step = 0; step < denoiseSteps; step++) {
+
+        setCurrentTrajectory(s);
+        const stepResults = [activeNoiseFragments[s].text];
+
+        for (let step = 1; step < denoiseSteps; step++) {
           if (abortRef.current) break;
           setCurrentStep(step);
-          const msg = generateStepPrompt(step, denoiseSteps, stateStr, guidance, step > 0 ? stepResults[step - 1] : null, previousSketches, lang);
-          const temp = Math.min(1.0 + s * 0.15, 1.6);
+          const msg = generateStepPrompt(step, denoiseSteps, stateStr, guidance, stepResults[step - 1], lang);
+          const temp = Math.min(1.0 + s * 0.08, 1.4);
           const result = await callModel([msg], temp);
           stepResults.push(result);
-          if (step === 0) previousSketches.push(result);
         }
-        if (!abortRef.current) {
+
+        if (!abortRef.current && stepResults.length > 0) {
           setTrajectories(prev => [...prev, stepResults[stepResults.length - 1]]);
           setAllStepOutputs(prev => [...prev, stepResults]);
         }
       }
+
+      setRunPhase(abortRef.current ? "review" : "complete");
     } catch (e) {
       setError(e.message);
+      setRunPhase("review");
     } finally {
       generationLockRef.current = false;
       setIsGenerating(false);
@@ -745,7 +942,9 @@ export default function App() {
               </div>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 20, marginBottom: 32 }}>
+            <WorkflowRail stage={workflowStage} />
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 20, marginBottom: 32 }}>
               <div>
                 <label style={{ ...label, marginBottom: 14 }}>{t("guidance_label")} — {guidance}</label>
                 <input type="range" min={1} max={10} value={guidance} onChange={e => setGuidance(parseInt(e.target.value))} />
@@ -758,17 +957,82 @@ export default function App() {
                   {denoiseSteps <= 2 ? t("steps_low") : denoiseSteps <= 4 ? t("steps_mid") : denoiseSteps <= 6 ? t("steps_high") : t("steps_ultra")}
                 </div>
               </div>
-              <div>
-                <label style={{ ...label, marginBottom: 14 }}>{t("samples_label")} — {numSamples}</label>
-                <input type="range" min={1} max={5} value={numSamples} onChange={e => setNumSamples(parseInt(e.target.value))} />
-                <div style={{ marginTop: 6, fontSize: 11, ...mono, color: "rgba(255,255,255,0.18)" }}>
-                  {numSamples} {t("parallel")} {numSamples === 1 ? t("trajectory") : t("trajectories")}
+              <div style={{
+                padding: "16px 18px",
+                background: "rgba(255,255,255,0.02)",
+                border: "1px solid rgba(255,255,255,0.06)",
+                borderRadius: 12
+              }}>
+                <div style={{ ...label, marginBottom: 10 }}>{t("latent_scan_label")}</div>
+                <div style={{ fontSize: 18, color: "rgba(255,170,40,0.88)", ...mono, fontWeight: 700, marginBottom: 6 }}>
+                  {NOISE_SCAN_COUNT}
+                </div>
+                <div style={{ fontSize: 11, ...mono, color: "rgba(255,255,255,0.24)", lineHeight: 1.7 }}>
+                  {t("latent_scan_rule")}
                 </div>
               </div>
             </div>
 
-            <button onClick={isGenerating ? () => { abortRef.current = true; } : generate}
-              disabled={!apiUrl && !isGenerating}
+            {noiseFragments.length === 0 && !isGenerating && (
+              <div style={{
+                marginBottom: 24,
+                padding: "18px 22px",
+                background: "rgba(255,255,255,0.02)",
+                border: "1px solid rgba(255,255,255,0.06)",
+                borderRadius: 12
+              }}>
+                <div style={{ fontSize: 9, ...mono, color: "rgba(255,170,40,0.4)", letterSpacing: 2, marginBottom: 10 }}>
+                  {t("noise_title")}
+                </div>
+                <p className="serif" style={{ margin: 0, fontSize: 15, lineHeight: 1.75, color: "rgba(255,255,255,0.62)" }}>
+                  {t("scan_empty")}
+                </p>
+              </div>
+            )}
+
+            {noiseFragments.length > 0 && (
+              <div style={{
+                marginBottom: 24,
+                padding: "20px 22px 22px",
+                background: "rgba(255,255,255,0.02)",
+                border: "1px solid rgba(255,255,255,0.06)",
+                borderRadius: 12
+              }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 10, flexWrap: "wrap" }}>
+                  <div style={{ fontSize: 9, ...mono, color: "rgba(255,170,40,0.4)", letterSpacing: 2 }}>
+                    {t("noise_title")}
+                  </div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <div style={{ padding: "5px 9px", borderRadius: 999, background: "rgba(255,170,40,0.08)", color: "rgba(255,170,40,0.76)", fontSize: 9, ...mono, letterSpacing: 1.2 }}>
+                      {keptNoiseFragments.length} {t("noise_kept")}
+                    </div>
+                    <div style={{ padding: "5px 9px", borderRadius: 999, background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.45)", fontSize: 9, ...mono, letterSpacing: 1.2 }}>
+                      {removedNoiseCount} {t("noise_removed")}
+                    </div>
+                    <div style={{ padding: "5px 9px", borderRadius: 999, background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.45)", fontSize: 9, ...mono, letterSpacing: 1.2 }}>
+                      {Math.max(0, MAX_NOISE_REMOVALS - removedNoiseCount)} {t("noise_left")}
+                    </div>
+                  </div>
+                </div>
+                <p className="serif" style={{ margin: "0 0 16px", fontSize: 15, lineHeight: 1.75, color: removedNoiseCount >= MAX_NOISE_REMOVALS ? "rgba(255,120,120,0.82)" : "rgba(255,255,255,0.62)" }}>
+                  {t("noise_prune_hint")}
+                </p>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 12 }}>
+                  {noiseFragments.map((fragment) => (
+                    <NoiseCard
+                      key={fragment.id}
+                      fragment={fragment}
+                      onToggle={toggleNoiseFragment}
+                      disableRemove={!fragment.removed && !canRemoveMoreNoise}
+                      isBusy={isGenerating}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <button onClick={isGenerating ? () => { abortRef.current = true; } : noiseFragments.length > 0 ? denoiseSelectedNoise : scanNoiseFragments}
+              disabled={(!apiUrl && !isGenerating) || (!isGenerating && noiseFragments.length > 0 && !canDenoiseSelectedNoise)}
               style={{
                 width: "100%", padding: "18px 0",
                 background: isGenerating ? "rgba(255,70,50,0.12)" : "rgba(255,170,40,0.1)",
@@ -776,10 +1040,31 @@ export default function App() {
                 borderRadius: 10, cursor: "pointer",
                 color: isGenerating ? "rgba(255,70,50,0.85)" : "rgba(255,170,40,0.85)",
                 fontSize: 12, ...mono, fontWeight: 600, letterSpacing: 3, transition: "all 0.3s ease",
-                opacity: !apiUrl && !isGenerating ? 0.3 : 1
+                opacity: ((!apiUrl && !isGenerating) || (!isGenerating && noiseFragments.length > 0 && !canDenoiseSelectedNoise)) ? 0.3 : 1
               }}>
-              {isGenerating ? t("btn_stop") : t("btn_denoise")}
+              {isGenerating ? t("btn_stop") : noiseFragments.length > 0 ? `${t("btn_denoise_kept")} ${keptNoiseFragments.length}` : t("btn_scan_noise")}
             </button>
+
+            {noiseFragments.length > 0 && !isGenerating && (
+              <button
+                onClick={scanNoiseFragments}
+                style={{
+                  width: "100%",
+                  padding: "12px 0",
+                  marginTop: 10,
+                  background: "none",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  borderRadius: 10,
+                  cursor: "pointer",
+                  color: "rgba(255,255,255,0.38)",
+                  fontSize: 10,
+                  ...mono,
+                  letterSpacing: 2
+                }}
+              >
+                {t("btn_rescan")}
+              </button>
+            )}
 
             {dailyRemaining !== null && dailyLimit !== null && (
               <div style={{ marginTop: 12, fontSize: 10, ...mono, color: dailyRemaining < 50 ? "rgba(255,90,90,0.7)" : "rgba(255,255,255,0.25)", textAlign: "right" }}>
@@ -790,7 +1075,9 @@ export default function App() {
             {isGenerating && (
               <div style={{ marginTop: 20, animation: "fadeUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) both" }}>
                 <div style={{ fontSize: 10, ...mono, color: "rgba(255,255,255,0.2)", marginBottom: 6 }}>
-                  {t("sample_of")} {currentSample + 1} / {numSamples}
+                  {runPhase === "scanning"
+                    ? t("progress_scanning")
+                    : `${t("trajectory_label")} ${currentTrajectory + 1} / ${keptNoiseFragments.length}`}
                 </div>
                 <StepIndicator currentStep={currentStep} totalSteps={denoiseSteps} isGenerating={true} />
               </div>
@@ -807,7 +1094,7 @@ export default function App() {
             {trajectories.length > 0 && (
               <div style={{ marginTop: 40, animation: "fadeUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) both" }}>
                 <div style={{ fontSize: 9, ...mono, color: "rgba(255,170,40,0.35)", letterSpacing: 3, marginBottom: 20 }}>
-                  {t("denoised_title")} — {t("guidance_label")} {guidance} — {t("steps_label")} {denoiseSteps} — BIG5 [{big5.join(",")}]
+                  {t("denoised_title")} — {keptNoiseFragments.length}/{noiseFragments.length} {t("noise_kept")} — {t("guidance_label")} {guidance} — {t("steps_label")} {denoiseSteps} — BIG5 [{big5.join(",")}]
                 </div>
                 {trajectories.map((traj, i) => (
                   <TrajectoryCard key={i} trajectory={traj} index={i} stepOutputs={allStepOutputs[i]} totalSteps={denoiseSteps} />
