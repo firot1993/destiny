@@ -150,41 +150,65 @@ function generateStepPrompt(step, totalSteps, state, guidance, prev, lang = "en"
   const progress = step / (totalSteps - 1);
   const guidanceDesc = guidance >= 7 ? "dramatic pivots, unexpected breakthroughs, biography-worthy" : guidance >= 4 ? "ambitious but grounded, notable achievements" : "meaningful, well-lived, not flashy";
   const personality = "The person's Big Five personality traits should deeply shape the trajectory. High openness = unconventional pivots. High conscientiousness = systematic empire-building. High extraversion = network-driven success. Low agreeableness = disruptive moves. High neuroticism = intense creative or emotional breakthroughs.";
+  const worldState = "No explicit world-state input is provided. Only infer broad contemporary pressures and opportunities, never named events or headlines.";
 
 if (step === 0) {
   return {
     role: "user",
-    content: `You are a Life Trajectory Diffusion Model scanning the latent space of possible futures.
+    content: `You are scanning the earliest unresolved signals of a person's future trajectory.
 
-CURRENT STATE OF THE PERSON:
+CURRENT STATE:
 ${state}
 
+PERSONALITY SIGNALS:
+${personality}
+
+WORLD STATE:
+${worldState}
+
 GUIDANCE SCALE: ${guidance}/10
-PERSONALITY: ${personality}
 
-STEP 0: LATENT SPACE SCAN
-Generate exactly 10 raw signal fragments from this person's possible futures. These are NOT predictions, NOT plans, NOT advice. They are flickers — glimpses caught from a dream before it dissolves.
+TASK:
+Generate exactly 10 raw future fragments.
 
-Rules:
-- Each fragment is 5-15 words max
-- Standalone images, sensations, or moments — not a sequence
-- Mix of tones: some bright, some dark, some strange, some quiet
-- Fragments can contradict each other — that's expected
-- No explanations, no context, no connecting words between them
-- Abstract enough to be interpreted multiple ways, concrete enough to provoke a feeling
-- Personality shapes the texture: ${guidance >= 7 ? "dramatic, vivid, high contrast" : guidance >= 4 ? "grounded but charged with potential" : "quiet, intimate, small but meaningful"}
+These are not predictions, not advice, not summaries, not slogans.
+They are unresolved fragments from possible futures — partial scenes, tensions, impulses, environments, losses, freedoms, habits, or systems that might later become a life.
 
-Think tarot imagery, not life coaching.
+Each fragment must:
+- be 4-12 words
+- stand alone
+- feel emotionally charged but still unfinished
+- suggest a future shape without explaining it
+- be interpretable in more than one way
+- avoid complete moral conclusions or polished "quote-like" phrasing
+- avoid personality trait labels
+- avoid direct advice, destiny claims, or biography summary language
 
-Format: exactly 10 lines, each as NUMBER::FRAGMENT
-Example format:
-1::a room where everyone finally stops pretending
-2::something you buried starts growing back
+Distribution requirements:
+- at least 2 fragments should hint at work / money / systems
+- at least 2 should hint at relationships / social position / visibility
+- at least 2 should hint at place / movement / environment
+- at least 2 should hint at inner cost / freedom / loss / desire
+- the remaining 2 can be strange, symbolic, or contradictory
 
-Respond with ONLY the 10 numbered fragments, nothing else.${langInstruction}`
+Tone:
+${guidance >= 7 ? "high-energy, vivid, sharp, but never slogan-like" : guidance >= 4 ? "grounded, tense, quietly magnetic" : "small, intimate, understated, lightly uncanny"}
+
+Important:
+Do NOT make them all sound equally poetic.
+Some should be plain, some strange, some sharp, some quiet.
+Do NOT make them read like a coherent set of themes.
+They should feel like fragments from different corners of the same latent space.
+
+Format exactly:
+1::...
+2::...
+...
+10::...
+
+Respond with only the 10 fragments.${langInstruction}`
   };
 }
-
 
   if (step === totalSteps - 1) {
     return {
