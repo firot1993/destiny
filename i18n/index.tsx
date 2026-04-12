@@ -1,6 +1,15 @@
-import { createContext, useContext, useState, useCallback } from "react";
+"use client";
 
-const translations = {
+import {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  type ReactNode,
+} from "react";
+import type { Language } from "@/types";
+
+const translations: Record<string, Record<string, string>> = {
   en: {
     // Header
     subtitle: "LIFE TRAJECTORY DIFFUSION",
@@ -13,7 +22,8 @@ const translations = {
     tab_generate: "03 GENERATE",
 
     // State page
-    state_desc: "Encode your current position in latent space. More specific inputs produce sharper denoised trajectories.",
+    state_desc:
+      "Encode your current position in latent space. More specific inputs produce sharper denoised trajectories.",
     age: "AGE",
     age_placeholder: "28",
     location: "LOCATION",
@@ -21,15 +31,19 @@ const translations = {
     skills: "SKILLS & EXPERTISE",
     skills_placeholder: "ML engineering, Solidity, full-stack, design...",
     resources: "WHAT YOU HAVE",
-    resources_placeholder: "savings, a small team, domain knowledge, connections...",
+    resources_placeholder:
+      "savings, a small team, domain knowledge, connections...",
     constraints: "WHAT HOLDS YOU BACK",
-    constraints_placeholder: "visa, capital, experience, fear, health...",
+    constraints_placeholder:
+      "visa, capital, experience, fear, health...",
     obsessions: "OBSESSIONS",
-    obsessions_placeholder: "what keeps you up at night, what you can't stop thinking about...",
+    obsessions_placeholder:
+      "what keeps you up at night, what you can't stop thinking about...",
     next_personality: "NEXT → PERSONALITY",
 
     // Big Five page
-    big5_desc: "Your personality shapes the trajectory — not just what happens, but how you respond. Five dimensions define your latent personality vector.",
+    big5_desc:
+      "Your personality shapes the trajectory — not just what happens, but how you respond. Five dimensions define your latent personality vector.",
     openness: "OPENNESS",
     openness_q: "When facing the unknown",
     openness_low: "I prefer the familiar",
@@ -62,11 +76,14 @@ const translations = {
     workflow_curate: "CURATE",
     workflow_denoise: "DENOISE",
     latent_scan_label: "LATENT SCAN",
-    latent_scan_rule: "Review 10 signals one by one. Remove is final. Keep up to 5, or delete 5 to auto-lock the rest.",
+    latent_scan_rule:
+      "Review 10 signals one by one. Remove is final. Keep up to 5, or delete 5 to auto-lock the rest.",
     noise_title: "LATENT SIGNALS",
-    scan_empty: "Scan once to surface 10 raw fragments. Then review each signal left-to-right and merge up to 5 keeps into one denoising seed.",
+    scan_empty:
+      "Scan once to surface 10 raw fragments. Then review each signal left-to-right and merge up to 5 keeps into one denoising seed.",
     noise_card_label: "SIGNAL",
-    noise_review_hint: "Left removes this signal forever. Right keeps it for the merged seed. Review ends after 5 keeps, 5 deletes, or when signals run out.",
+    noise_review_hint:
+      "Left removes this signal forever. Right keeps it for the merged seed. Review ends after 5 keeps, 5 deletes, or when signals run out.",
     noise_kept: "kept",
     noise_keep_slots_left: "keep slots left",
     noise_deleted: "deleted",
@@ -74,14 +91,17 @@ const translations = {
     noise_keep_action: "KEEP  →",
     kept_signals_title: "KEPT SIGNALS",
     merged_seed_title: "MERGED SEED",
-    merged_seed_hint: "One kept signal was dropped and replaced by a random unselected wildcard before denoising.",
+    merged_seed_hint:
+      "One kept signal was dropped and replaced by a random unselected wildcard before denoising.",
     noise_selected_label: "SELECTED",
     noise_wildcard_label: "WILDCARD",
     noise_wildcard_hint: "Random unselected signal pulled into the merge.",
     noise_dropped_label: "DROPPED",
     noise_choice_locked: "Selection locked. Holding your five signals.",
-    noise_system_override: "INPUT COMPLETE. ONE UNCONTROLLABLE VARIABLE HAS BEEN CORRECTED.",
-    noise_ready_hint: "This final seed is shuffled before denoising, with one random wildcard swapped in from the unselected signals.",
+    noise_system_override:
+      "INPUT COMPLETE. ONE UNCONTROLLABLE VARIABLE HAS BEEN CORRECTED.",
+    noise_ready_hint:
+      "This final seed is shuffled before denoising, with one random wildcard swapped in from the unselected signals.",
     guidance_1: "quiet life",
     guidance_2: "steady path",
     guidance_3: "solid",
@@ -126,8 +146,6 @@ const translations = {
 
     // Settings
     settings: "SETTINGS",
-    api_endpoint: "API ENDPOINT",
-    api_endpoint_placeholder: "https://your-worker.workers.dev",
   },
 
   zh: {
@@ -154,7 +172,8 @@ const translations = {
     obsessions_placeholder: "什么让你夜不能寐，什么让你无法停止思考...",
     next_personality: "下一步 → 人格",
 
-    big5_desc: "你的人格塑造轨迹——不仅决定发生什么，还决定你如何回应。五个维度定义你的潜在人格向量。",
+    big5_desc:
+      "你的人格塑造轨迹——不仅决定发生什么，还决定你如何回应。五个维度定义你的潜在人格向量。",
     openness: "开放性",
     openness_q: "面对未知时",
     openness_low: "我偏好熟悉的",
@@ -186,11 +205,14 @@ const translations = {
     workflow_curate: "筛选",
     workflow_denoise: "去噪",
     latent_scan_label: "潜空间扫描",
-    latent_scan_rule: "逐条查看 10 条信号。删除不可恢复，最多保留 5 条；若删满 5 条，剩余信号会自动锁定。",
+    latent_scan_rule:
+      "逐条查看 10 条信号。删除不可恢复，最多保留 5 条；若删满 5 条，剩余信号会自动锁定。",
     noise_title: "潜在信号",
-    scan_empty: "先扫描 10 条原始碎片，再逐条决定删除或保留，最后将最多 5 条保留项合并成一个去噪种子。",
+    scan_empty:
+      "先扫描 10 条原始碎片，再逐条决定删除或保留，最后将最多 5 条保留项合并成一个去噪种子。",
     noise_card_label: "信号",
-    noise_review_hint: "左边删除且不可恢复，右边保留到合并种子里。保留满 5 条、删除满 5 条，或信号用完后结束筛选。",
+    noise_review_hint:
+      "左边删除且不可恢复，右边保留到合并种子里。保留满 5 条、删除满 5 条，或信号用完后结束筛选。",
     noise_kept: "保留",
     noise_keep_slots_left: "剩余可保留",
     noise_deleted: "已删",
@@ -205,7 +227,8 @@ const translations = {
     noise_dropped_label: "已丢弃",
     noise_choice_locked: "选择已锁定。请先确认这 5 条是你的选择。",
     noise_system_override: "输入完成。已为您修正一项不可控变量。",
-    noise_ready_hint: "最终种子会先打乱，并从未选中的信号里随机换入一条 wildcard，再进入去噪。",
+    noise_ready_hint:
+      "最终种子会先打乱，并从未选中的信号里随机换入一条 wildcard，再进入去噪。",
     guidance_1: "平淡一生",
     guidance_2: "稳健之路",
     guidance_3: "踏实",
@@ -248,27 +271,33 @@ const translations = {
     model_label: "模型",
 
     settings: "设置",
-    api_endpoint: "API 端点",
-    api_endpoint_placeholder: "https://your-worker.workers.dev",
-  }
+  },
 };
 
-const I18nContext = createContext();
+interface I18nContextValue {
+  lang: Language;
+  t: (key: string) => string;
+  toggleLang: () => void;
+}
 
-export function I18nProvider({ children }) {
-  const [lang, setLang] = useState(() => {
+const I18nContext = createContext<I18nContextValue | null>(null);
+
+export function I18nProvider({ children }: { children: ReactNode }) {
+  const [lang, setLang] = useState<Language>(() => {
+    if (typeof window === "undefined") return "en";
     const saved = new URLSearchParams(window.location.search).get("lang");
-    if (saved && translations[saved]) return saved;
+    if (saved && translations[saved]) return saved as Language;
     const browserLang = navigator.language || "en";
     return browserLang.startsWith("zh") ? "zh" : "en";
   });
 
-  const t = useCallback((key) => {
-    return translations[lang]?.[key] || translations["en"]?.[key] || key;
-  }, [lang]);
+  const t = useCallback(
+    (key: string) => translations[lang]?.[key] ?? translations["en"]?.[key] ?? key,
+    [lang]
+  );
 
   const toggleLang = useCallback(() => {
-    setLang(l => l === "en" ? "zh" : "en");
+    setLang((l) => (l === "en" ? "zh" : "en"));
   }, []);
 
   return (
@@ -278,6 +307,8 @@ export function I18nProvider({ children }) {
   );
 }
 
-export function useI18n() {
-  return useContext(I18nContext);
+export function useI18n(): I18nContextValue {
+  const ctx = useContext(I18nContext);
+  if (!ctx) throw new Error("useI18n must be used inside I18nProvider");
+  return ctx;
 }
