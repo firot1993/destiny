@@ -1,6 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import {
+  ArrowLeft,
+  Languages,
+  Play,
+  RefreshCw,
+  Settings,
+  Square,
+} from "lucide-react";
 import { useI18n } from "@/i18n";
 import { useGeneration } from "@/hooks/useGeneration";
 import { InputForm } from "@/components/InputForm";
@@ -10,21 +18,38 @@ import { StepIndicator } from "@/components/StepIndicator";
 import { TrajectoryCard } from "@/components/TrajectoryCard";
 import { NoiseReviewCard } from "@/components/NoiseReviewCard";
 import { NoiseSeedPanel } from "@/components/NoiseSeedPanel";
+import { buildFieldsFromAnswers } from "@/lib/questionnaire";
 import { PROVIDERS, DEFAULT_PROVIDER } from "@/lib/constants";
-import type { Fields } from "@/types";
+import { theme, mono, labelStyles } from "@/lib/theme";
+import type { QuestionnaireAnswers } from "@/types";
 
 type PageTab = "input" | "big5" | "generate";
 
-const mono = { fontFamily: "'JetBrains Mono', monospace" };
+const labelStyle = labelStyles.field;
 
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  fontSize: 10,
-  ...mono,
-  color: "rgba(255,255,255,0.5)",
-  fontWeight: 500,
-  letterSpacing: 1.5,
+const sectionLabelStyle: React.CSSProperties = {
+  ...labelStyles.section,
   marginBottom: 10,
+};
+
+const profileChipStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  minHeight: 28,
+  padding: "6px 10px",
+  borderRadius: 999,
+  border: `1px solid ${theme.inkBorder07}`,
+  background: "rgba(255,250,240,0.48)",
+  fontSize: 11,
+  color: theme.ink55,
+  ...mono,
+};
+
+const profileAccentChipStyle: React.CSSProperties = {
+  ...profileChipStyle,
+  border: `1px solid ${theme.mossBorder16}`,
+  background: theme.mossBg06,
+  color: theme.moss78,
 };
 
 export default function Home() {
@@ -33,22 +58,16 @@ export default function Home() {
   // Page / settings state
   const [page, setPage] = useState<PageTab>("input");
   const [showSettings, setShowSettings] = useState(false);
-  const [fields, setFields] = useState<Fields>({
-    age: "",
-    location: "",
-    skills: "",
-    resources: "",
-    constraints: "",
-    obsessions: "",
-  });
+  const [questionnaireAnswers, setQuestionnaireAnswers] =
+    useState<QuestionnaireAnswers>({});
   const [big5, setBig5] = useState([5, 5, 5, 5, 5]);
   const [guidance, setGuidance] = useState(7);
   const [denoiseSteps, setDenoiseSteps] = useState(4);
   const [provider, setProvider] = useState(DEFAULT_PROVIDER);
   const [model, setModel] = useState(PROVIDERS[DEFAULT_PROVIDER][0]);
+  const [enableWildcard, setEnableWildcard] = useState(true);
+  const fields = useMemo(() => buildFieldsFromAnswers(questionnaireAnswers), [questionnaireAnswers]);
 
-  const updateField = (key: keyof Fields, val: string) =>
-    setFields((f) => ({ ...f, [key]: val }));
   const updateBig5 = (idx: number, val: number) =>
     setBig5((b) => { const n = [...b]; n[idx] = val; return n; });
 
@@ -62,119 +81,64 @@ export default function Home() {
     model,
     lang,
     t,
+    enableWildcard,
   });
 
-  const guidanceLabels = [
+  const guidanceLabels = useMemo(() => [
     "",
     ...Array.from({ length: 10 }, (_, i) => t(`guidance_${i + 1}`)),
-  ];
+  ], [t]);
 
   return (
-    <div data-lang={lang} style={{ minHeight: "100vh" }}>
-      <div style={{ maxWidth: 680, margin: "0 auto", padding: "48px 24px 80px" }}>
+    <div data-lang={lang} className="page-shell">
+      <main className="page-frame">
 
         {/* ─── Header ─── */}
-        <div style={{ marginBottom: 44, position: "relative" }}>
-          <div
-            style={{
-              position: "absolute",
-              top: 0,
-              right: 0,
-              display: "flex",
-              gap: 8,
-            }}
-          >
-            <button
-              onClick={toggleLang}
+        <header className="page-header">
+          <div>
+            <div className="page-kicker">{t("subtitle")}</div>
+            <h1
+              className="destiny-title serif"
               style={{
-                background: "rgba(255,255,255,0.04)",
-                border: "1px solid rgba(255,255,255,0.08)",
-                borderRadius: 6,
-                padding: "5px 12px",
-                cursor: "pointer",
-                color: "rgba(255,255,255,0.4)",
-                fontSize: 11,
-                ...mono,
+                fontFamily:
+                  lang === "zh"
+                    ? "var(--serif-zh)"
+                    : "var(--display)",
               }}
             >
+              <span>{t("title_1")}</span>
+              <span className="title-offset">{t("title_2")}</span>
+            </h1>
+            <div className="title-rule" />
+          </div>
+          <div className="header-actions">
+            <button
+              className="utility-button"
+              aria-label={lang === "en" ? "Switch to Chinese" : "切换到英文"}
+              onClick={toggleLang}
+            >
+              <Languages size={14} strokeWidth={1.8} aria-hidden="true" />
               {lang === "en" ? "中文" : "EN"}
             </button>
             <button
+              className="utility-button icon-only"
+              data-active={showSettings ? "true" : "false"}
+              aria-label={t("settings")}
               onClick={() => setShowSettings(!showSettings)}
-              style={{
-                background: showSettings
-                  ? "rgba(255,170,40,0.1)"
-                  : "rgba(255,255,255,0.04)",
-                border: `1px solid ${
-                  showSettings
-                    ? "rgba(255,170,40,0.2)"
-                    : "rgba(255,255,255,0.08)"
-                }`,
-                borderRadius: 6,
-                padding: "5px 12px",
-                cursor: "pointer",
-                color: showSettings
-                  ? "rgba(255,170,40,0.7)"
-                  : "rgba(255,255,255,0.4)",
-                fontSize: 11,
-                ...mono,
-              }}
+              title={t("settings")}
             >
-              ⚙
+              <Settings size={15} strokeWidth={1.8} aria-hidden="true" />
             </button>
           </div>
-          <div
-            style={{
-              fontSize: 9,
-              ...mono,
-              color: "rgba(255,170,40,0.45)",
-              letterSpacing: 4,
-              marginBottom: 14,
-            }}
-          >
-            {t("subtitle")}
-          </div>
-          <h1
-            className="serif"
-            style={{
-              fontFamily:
-                lang === "zh"
-                  ? "'Noto Serif SC', serif"
-                  : "'Playfair Display', Georgia, serif",
-              fontSize: lang === "zh" ? 36 : 40,
-              fontWeight: 900,
-              margin: 0,
-              lineHeight: 1.1,
-              background:
-                "linear-gradient(135deg, rgba(255,255,255,0.92), rgba(255,170,40,0.65))",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-            }}
-          >
-            {t("title_1")}
-            <br />
-            {t("title_2")}
-          </h1>
-        </div>
+        </header>
 
         {/* ─── Settings panel ─── */}
         {showSettings && (
-          <div
-            style={{
-              marginBottom: 28,
-              padding: "20px 24px",
-              background: "rgba(255,255,255,0.02)",
-              border: "1px solid rgba(255,255,255,0.06)",
-              borderRadius: 12,
-              animation: "fadeUp 0.4s cubic-bezier(0.16, 1, 0.3, 1)",
-            }}
-          >
+          <div className="settings-panel">
             <div
               style={{
-                fontSize: 9,
-                ...mono,
-                color: "rgba(255,170,40,0.4)",
-                letterSpacing: 2,
+                ...sectionLabelStyle,
+                color: theme.moss78,
                 marginBottom: 16,
               }}
             >
@@ -197,19 +161,19 @@ export default function Home() {
                       textAlign: "left",
                       background:
                         provider === p
-                          ? "rgba(255,170,40,0.1)"
-                          : "rgba(255,255,255,0.02)",
+                          ? theme.mossBg09
+                          : "rgba(255,250,240,0.44)",
                       border: `1px solid ${
                         provider === p
-                          ? "rgba(255,170,40,0.25)"
-                          : "rgba(255,255,255,0.06)"
+                          ? theme.mossBorder24
+                          : theme.inkBorder07
                       }`,
                       borderRadius: 8,
                       cursor: "pointer",
                       color:
                         provider === p
-                          ? "rgba(255,170,40,0.88)"
-                          : "rgba(255,255,255,0.45)",
+                          ? theme.moss
+                          : theme.ink5,
                       fontSize: 11,
                       ...mono,
                       letterSpacing: 1,
@@ -234,19 +198,19 @@ export default function Home() {
                       textAlign: "left",
                       background:
                         model === modelOption
-                          ? "rgba(255,170,40,0.1)"
-                          : "rgba(255,255,255,0.02)",
+                          ? theme.mossBg09
+                          : "rgba(255,250,240,0.44)",
                       border: `1px solid ${
                         model === modelOption
-                          ? "rgba(255,170,40,0.25)"
-                          : "rgba(255,255,255,0.06)"
+                          ? theme.mossBorder24
+                          : theme.inkBorder07
                       }`,
                       borderRadius: 8,
                       cursor: "pointer",
                       color:
                         model === modelOption
-                          ? "rgba(255,170,40,0.88)"
-                          : "rgba(255,255,255,0.45)",
+                          ? theme.moss
+                          : theme.ink5,
                       fontSize: 11,
                       ...mono,
                       letterSpacing: 0.4,
@@ -261,14 +225,7 @@ export default function Home() {
         )}
 
         {/* ─── Tabs ─── */}
-        <div
-          style={{
-            display: "flex",
-            gap: 0,
-            marginBottom: 36,
-            borderBottom: "1px solid rgba(255,255,255,0.06)",
-          }}
-        >
+        <nav className="page-tabs" aria-label="Destiny setup steps">
           {(
             [
               { id: "input" as const, label: t("tab_state") },
@@ -278,36 +235,20 @@ export default function Home() {
           ).map((tab) => (
             <button
               key={tab.id}
+              className="page-tab"
+              data-active={page === tab.id ? "true" : "false"}
               onClick={() => setPage(tab.id)}
-              style={{
-                background: "none",
-                border: "none",
-                borderBottom:
-                  page === tab.id
-                    ? "2px solid rgba(255,170,40,0.7)"
-                    : "2px solid transparent",
-                padding: "10px 16px",
-                cursor: "pointer",
-                color:
-                  page === tab.id
-                    ? "rgba(255,170,40,0.9)"
-                    : "rgba(255,255,255,0.45)",
-                fontSize: 11,
-                ...mono,
-                letterSpacing: 1.5,
-                transition: "all 0.3s ease",
-              }}
             >
               {tab.label}
             </button>
           ))}
-        </div>
+        </nav>
 
         {/* ─── PAGE 1: STATE ─── */}
         {page === "input" && (
           <InputForm
-            fields={fields}
-            onFieldChange={updateField}
+            answers={questionnaireAnswers}
+            onAnswersChange={setQuestionnaireAnswers}
             onNext={() => setPage("big5")}
           />
         )}
@@ -332,51 +273,58 @@ export default function Home() {
               style={{
                 padding: "18px 22px",
                 marginBottom: 28,
-                background: "rgba(255,255,255,0.015)",
-                border: "1px solid rgba(255,255,255,0.05)",
-                borderRadius: 10,
+                background: "rgba(255,250,240,0.54)",
+                border: `1px solid ${theme.mossBorder16}`,
+                borderRadius: 8,
               }}
             >
-              <div
-                style={{
-                  fontSize: 9,
-                  ...mono,
-                  color: "rgba(255,170,40,0.35)",
-                  letterSpacing: 2,
-                  marginBottom: 10,
-                }}
-              >
+              <div style={sectionLabelStyle}>
                 {t("encoded_state")}
               </div>
               <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
                 {fields.age && (
-                  <span
-                    style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", ...mono }}
-                  >
-                    age:{fields.age}
+                  <span style={profileChipStyle}>
+                    Age {fields.age}
                   </span>
                 )}
                 {fields.location && (
-                  <span
-                    style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", ...mono }}
-                  >
-                    loc:{fields.location}
+                  <span style={profileChipStyle}>
+                    {fields.location}
                   </span>
                 )}
-                <span
-                  style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", ...mono }}
-                >
-                  big5:[{big5.join(",")}]
+                {fields.currentMode && (
+                  <span style={profileChipStyle}>
+                    {fields.currentMode}
+                  </span>
+                )}
+                {fields.trajectoryFocus && (
+                  <span style={profileAccentChipStyle}>
+                    {fields.trajectoryFocus}
+                  </span>
+                )}
+                {fields.workStyle && (
+                  <span style={profileChipStyle}>
+                    {fields.workStyle}
+                  </span>
+                )}
+                {fields.riskTolerance && (
+                  <span style={profileChipStyle}>
+                    {fields.riskTolerance}
+                  </span>
+                )}
+                {fields.timeHorizon && (
+                  <span style={profileChipStyle}>
+                    {fields.timeHorizon}
+                  </span>
+                )}
+                <span style={profileChipStyle}>
+                  Big5 [{big5.join(",")}]
                 </span>
-                <span
-                  style={{ fontSize: 12, color: "rgba(255,170,40,0.35)", ...mono }}
-                >
-                  via:{provider}
+                <span style={profileAccentChipStyle}>
+                  {provider}
                 </span>
-                <span
-                  style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", ...mono }}
-                >
-                  model:{model}
+                <span style={profileChipStyle}>
+                  {model}
                 </span>
               </div>
             </div>
@@ -408,7 +356,7 @@ export default function Home() {
                     marginTop: 6,
                     fontSize: 11,
                     ...mono,
-                    color: "rgba(255,170,40,0.45)",
+                    color: theme.moss62,
                   }}
                 >
                   {guidanceLabels[guidance]}
@@ -430,7 +378,7 @@ export default function Home() {
                     marginTop: 6,
                     fontSize: 11,
                     ...mono,
-                    color: "rgba(255,170,40,0.45)",
+                    color: theme.plum72,
                   }}
                 >
                   {denoiseSteps <= 2
@@ -445,9 +393,9 @@ export default function Home() {
               <div
                 style={{
                   padding: "16px 18px",
-                  background: "rgba(255,255,255,0.02)",
-                  border: "1px solid rgba(255,255,255,0.06)",
-                  borderRadius: 12,
+                  background: theme.plumBg07,
+                  border: `1px solid ${theme.plumBorder18}`,
+                  borderRadius: 8,
                 }}
               >
                 <div style={{ ...labelStyle, marginBottom: 10 }}>
@@ -456,7 +404,7 @@ export default function Home() {
                 <div
                   style={{
                     fontSize: 18,
-                    color: "rgba(255,170,40,0.88)",
+                    color: theme.plum,
                     ...mono,
                     fontWeight: 700,
                     marginBottom: 6,
@@ -468,7 +416,7 @@ export default function Home() {
                   style={{
                     fontSize: 11,
                     ...mono,
-                    color: "rgba(255,255,255,0.24)",
+                    color: theme.ink38,
                     lineHeight: 1.7,
                   }}
                 >
@@ -477,26 +425,90 @@ export default function Home() {
               </div>
             </div>
 
+            {/* Wildcard toggle */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "12px 16px",
+                marginBottom: 32,
+                marginTop: -12,
+                background: theme.inkBg025,
+                border: `1px solid ${theme.mossBorder16}`,
+                borderRadius: 8,
+              }}
+            >
+              <div>
+                <div
+                  style={{
+                    fontSize: 10,
+                    ...mono,
+                    color: theme.ink5,
+                    fontWeight: 500,
+                    letterSpacing: 0.6,
+                    marginBottom: 3,
+                  }}
+                >
+                  {t("wildcard_label")}
+                </div>
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: theme.ink38,
+                    ...mono,
+                  }}
+                >
+                  {t("wildcard_hint")}
+                </div>
+              </div>
+              <button
+                role="switch"
+                aria-checked={enableWildcard}
+                aria-label={t("wildcard_label")}
+                onClick={() => setEnableWildcard((v) => !v)}
+                style={{
+                  flexShrink: 0,
+                  marginLeft: 16,
+                  width: 44,
+                  height: 24,
+                  borderRadius: 999,
+                  border: "none",
+                  cursor: "pointer",
+                  background: enableWildcard
+                    ? theme.moss78
+                    : theme.inkBorder12,
+                  position: "relative",
+                  transition: "background 0.2s ease",
+                }}
+              >
+                <span
+                  style={{
+                    position: "absolute",
+                    top: 3,
+                    left: enableWildcard ? 23 : 3,
+                    width: 18,
+                    height: 18,
+                    borderRadius: "50%",
+                    background: theme.surface,
+                    transition: "left 0.2s ease",
+                  }}
+                />
+              </button>
+            </div>
+
             {/* Empty noise placeholder */}
             {gen.noiseFragments.length === 0 && !gen.isGenerating && (
               <div
                 style={{
                   marginBottom: 24,
                   padding: "18px 22px",
-                  background: "rgba(255,255,255,0.02)",
-                  border: "1px solid rgba(255,255,255,0.06)",
-                  borderRadius: 12,
+                  background: theme.inkBg025,
+                  border: `1px solid ${theme.inkBorder07}`,
+                  borderRadius: 8,
                 }}
               >
-                <div
-                  style={{
-                    fontSize: 9,
-                    ...mono,
-                    color: "rgba(255,170,40,0.4)",
-                    letterSpacing: 2,
-                    marginBottom: 10,
-                  }}
-                >
+                <div style={{ ...sectionLabelStyle, marginBottom: 10 }}>
                   {t("noise_title")}
                 </div>
                 <p
@@ -505,7 +517,7 @@ export default function Home() {
                     margin: 0,
                     fontSize: 15,
                     lineHeight: 1.75,
-                    color: "rgba(255,255,255,0.62)",
+                    color: theme.ink6,
                   }}
                 >
                   {t("scan_empty")}
@@ -534,9 +546,9 @@ export default function Home() {
                 style={{
                   marginBottom: 24,
                   padding: "18px 22px",
-                  background: "rgba(255,255,255,0.02)",
-                  border: "1px solid rgba(255,255,255,0.06)",
-                  borderRadius: 12,
+                  background: theme.inkBg025,
+                  border: `1px solid ${theme.inkBorder07}`,
+                  borderRadius: 8,
                 }}
               >
                 <div
@@ -549,14 +561,7 @@ export default function Home() {
                     marginBottom: 10,
                   }}
                 >
-                  <div
-                    style={{
-                      fontSize: 9,
-                      ...mono,
-                      color: "rgba(255,170,40,0.4)",
-                      letterSpacing: 2,
-                    }}
-                  >
+                  <div style={{ ...labelStyles.section, marginBottom: 0 }}>
                     {t("noise_title")}
                   </div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -564,11 +569,11 @@ export default function Home() {
                       style={{
                         padding: "5px 9px",
                         borderRadius: 999,
-                        background: "rgba(255,170,40,0.08)",
-                        color: "rgba(255,170,40,0.76)",
+                        background: theme.mossBg09,
+                        color: theme.moss,
                         fontSize: 9,
                         ...mono,
-                        letterSpacing: 1.2,
+                        letterSpacing: 0.8,
                       }}
                     >
                       {gen.keptNoiseFragments.length} / 5 {t("noise_kept")}
@@ -577,11 +582,11 @@ export default function Home() {
                       style={{
                         padding: "5px 9px",
                         borderRadius: 999,
-                        background: "rgba(255,255,255,0.04)",
-                        color: "rgba(255,255,255,0.45)",
+                        background: theme.inkBg04,
+                        color: theme.ink5,
                         fontSize: 9,
                         ...mono,
-                        letterSpacing: 1.2,
+                        letterSpacing: 0.8,
                       }}
                     >
                       {gen.removedNoiseCount} / 5 {t("noise_deleted")}
@@ -594,7 +599,7 @@ export default function Home() {
                     margin: 0,
                     fontSize: 15,
                     lineHeight: 1.75,
-                    color: "rgba(255,255,255,0.62)",
+                    color: theme.ink6,
                   }}
                 >
                   {gen.isMergeRevealPending
@@ -633,22 +638,22 @@ export default function Home() {
                   width: "100%",
                   padding: "18px 0",
                   background: gen.isGenerating
-                    ? "rgba(255,70,50,0.12)"
-                    : "rgba(255,170,40,0.1)",
+                    ? theme.redBg08
+                    : theme.moss,
                   border: `1px solid ${
                     gen.isGenerating
-                      ? "rgba(255,70,50,0.25)"
-                      : "rgba(255,170,40,0.22)"
+                      ? theme.redBorder22
+                      : theme.mossBorder24
                   }`,
-                  borderRadius: 10,
+                  borderRadius: 8,
                   cursor: "pointer",
                   color: gen.isGenerating
-                    ? "rgba(255,70,50,0.85)"
-                    : "rgba(255,170,40,0.85)",
+                    ? theme.red85
+                    : theme.paper,
                   fontSize: 12,
                   ...mono,
                   fontWeight: 600,
-                  letterSpacing: 3,
+                  letterSpacing: 1.5,
                   transition: "all 0.3s ease",
                   opacity:
                     (!gen.isGenerating &&
@@ -659,13 +664,20 @@ export default function Home() {
                       : 1,
                 }}
               >
-                {gen.isGenerating
-                  ? t("btn_stop")
-                  : gen.isMergeRevealPending
-                  ? t("btn_preparing_merge")
-                  : gen.noiseFragments.length > 0
-                  ? t("btn_denoise_merged")
-                  : t("btn_scan_noise")}
+                <span className="icon-text">
+                  {gen.isGenerating ? (
+                    <Square size={13} strokeWidth={2} aria-hidden="true" />
+                  ) : (
+                    <Play size={13} strokeWidth={2} aria-hidden="true" />
+                  )}
+                  {gen.isGenerating
+                    ? t("btn_stop")
+                    : gen.isMergeRevealPending
+                    ? t("btn_preparing_merge")
+                    : gen.noiseFragments.length > 0
+                    ? t("btn_denoise_merged")
+                    : t("btn_scan_noise")}
+                </span>
               </button>
             )}
 
@@ -678,16 +690,19 @@ export default function Home() {
                   padding: "12px 0",
                   marginTop: 10,
                   background: "none",
-                  border: "1px solid rgba(255,255,255,0.08)",
-                  borderRadius: 10,
+                  border: `1px solid ${theme.inkBorder08}`,
+                  borderRadius: 8,
                   cursor: "pointer",
-                  color: "rgba(255,255,255,0.38)",
+                  color: theme.ink38,
                   fontSize: 10,
                   ...mono,
-                  letterSpacing: 2,
+                  letterSpacing: 1,
                 }}
               >
-                {t("btn_rescan")}
+                <span className="icon-text">
+                  <RefreshCw size={13} strokeWidth={1.9} aria-hidden="true" />
+                  {t("btn_rescan")}
+                </span>
               </button>
             )}
 
@@ -700,8 +715,8 @@ export default function Home() {
                   ...mono,
                   color:
                     gen.dailyRemaining < 50
-                      ? "rgba(255,90,90,0.7)"
-                      : "rgba(255,255,255,0.25)",
+                      ? theme.red85
+                      : theme.ink3,
                   textAlign: "right",
                 }}
               >
@@ -721,8 +736,9 @@ export default function Home() {
                   style={{
                     fontSize: 10,
                     ...mono,
-                    color: "rgba(255,255,255,0.2)",
+                    color: theme.ink35,
                     marginBottom: 6,
+                    letterSpacing: 0.6,
                   }}
                 >
                   {gen.runPhase === "scanning"
@@ -743,11 +759,11 @@ export default function Home() {
                 style={{
                   marginTop: 18,
                   padding: "12px 18px",
-                  background: "rgba(255,50,50,0.07)",
-                  border: "1px solid rgba(255,50,50,0.15)",
+                  background: theme.redBg05,
+                  border: `1px solid ${theme.redBorder14}`,
                   borderRadius: 8,
                   fontSize: 12,
-                  color: "rgba(255,90,90,0.85)",
+                  color: theme.red88,
                   ...mono,
                 }}
               >
@@ -763,18 +779,10 @@ export default function Home() {
                   animation: "fadeUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) both",
                 }}
               >
-                <div
-                  style={{
-                    fontSize: 9,
-                    ...mono,
-                    color: "rgba(255,170,40,0.35)",
-                    letterSpacing: 3,
-                    marginBottom: 20,
-                  }}
-                >
+                <div style={sectionLabelStyle}>
                   {t("denoised_title")} — {gen.keptNoiseFragments.length}{" "}
                   {t("merged_signals_label")} — {t("guidance_label")} {guidance} —{" "}
-                  {t("steps_label")} {denoiseSteps} — BIG5 [{big5.join(",")}]
+                  {t("steps_label")} {denoiseSteps}
                 </div>
                 {gen.trajectories.map((traj, i) => (
                   <TrajectoryCard
@@ -782,7 +790,6 @@ export default function Home() {
                     trajectory={traj}
                     index={i}
                     stepOutputs={gen.allStepOutputs[i]}
-                    totalSteps={denoiseSteps}
                   />
                 ))}
               </div>
@@ -797,16 +804,19 @@ export default function Home() {
                     flex: 1,
                     padding: "12px 0",
                     background: "none",
-                    border: "1px solid rgba(255,255,255,0.05)",
+                    border: `1px solid ${theme.inkBorder07}`,
                     borderRadius: 8,
-                    color: "rgba(255,255,255,0.2)",
+                    color: theme.ink35,
                     fontSize: 10,
                     ...mono,
-                    letterSpacing: 2,
+                    letterSpacing: 1,
                     cursor: "pointer",
                   }}
                 >
-                  {t("edit_state")}
+                  <span className="icon-text">
+                    <ArrowLeft size={13} strokeWidth={1.9} aria-hidden="true" />
+                    {t("edit_state")}
+                  </span>
                 </button>
                 <button
                   onClick={() => setPage("big5")}
@@ -814,22 +824,25 @@ export default function Home() {
                     flex: 1,
                     padding: "12px 0",
                     background: "none",
-                    border: "1px solid rgba(255,255,255,0.05)",
+                    border: `1px solid ${theme.inkBorder07}`,
                     borderRadius: 8,
-                    color: "rgba(255,255,255,0.2)",
+                    color: theme.ink35,
                     fontSize: 10,
                     ...mono,
-                    letterSpacing: 2,
+                    letterSpacing: 1,
                     cursor: "pointer",
                   }}
                 >
-                  {t("edit_personality")}
+                  <span className="icon-text">
+                    <ArrowLeft size={13} strokeWidth={1.9} aria-hidden="true" />
+                    {t("edit_personality")}
+                  </span>
                 </button>
               </div>
             )}
           </div>
         )}
-      </div>
+      </main>
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useI18n } from "@/i18n";
 import { MAX_KEPT_NOISE } from "@/lib/constants";
+import { theme, mono, labelStyles } from "@/lib/theme";
 import type { NoiseFragment, MergedNoisePlan, MergeRevealStage } from "@/types";
 
 interface NoiseSeedPanelProps {
@@ -18,7 +19,6 @@ export function NoiseSeedPanel({
   revealStage = "idle",
 }: NoiseSeedPanelProps) {
   const { t } = useI18n();
-  const mono = { fontFamily: "'JetBrains Mono', monospace" };
 
   const showMergedFragments = showMergedState && revealStage === "revealed";
   const isGlitchStage = showMergedState && revealStage === "glitch";
@@ -34,9 +34,9 @@ export function NoiseSeedPanel({
       style={{
         marginBottom: 24,
         padding: "18px 22px 22px",
-        background: "rgba(255,255,255,0.02)",
-        border: "1px solid rgba(255,255,255,0.06)",
-        borderRadius: 12,
+        background: "rgba(255,250,240,0.56)",
+        border: `1px solid ${theme.mossBorder16}`,
+        borderRadius: 8,
       }}
     >
       <div
@@ -51,10 +51,8 @@ export function NoiseSeedPanel({
       >
         <div
           style={{
-            fontSize: 9,
-            ...mono,
-            color: "rgba(255,170,40,0.42)",
-            letterSpacing: 2,
+            ...labelStyles.section,
+            color: theme.moss78,
           }}
         >
           {showMergedFragments ? t("merged_seed_title") : t("kept_signals_title")}
@@ -63,11 +61,11 @@ export function NoiseSeedPanel({
           style={{
             padding: "5px 9px",
             borderRadius: 999,
-            background: "rgba(255,170,40,0.08)",
-            color: "rgba(255,170,40,0.78)",
+            background: theme.mossBg09,
+            color: theme.moss,
             fontSize: 9,
             ...mono,
-            letterSpacing: 1.2,
+            letterSpacing: 0.8,
           }}
         >
           {displayFragments.length} / {MAX_KEPT_NOISE}{" "}
@@ -80,17 +78,17 @@ export function NoiseSeedPanel({
           style={{
             marginBottom: 12,
             padding: "10px 12px",
-            borderRadius: 10,
-            background: "rgba(255,255,255,0.03)",
-            border: "1px solid rgba(255,255,255,0.06)",
+            borderRadius: 8,
+            background: "rgba(255,250,240,0.48)",
+            border: `1px solid ${theme.mossBorder16}`,
           }}
         >
           <div
             style={{
               fontSize: 10,
               ...mono,
-              letterSpacing: 1.4,
-              color: "rgba(255,255,255,0.58)",
+              letterSpacing: 0.8,
+              color: theme.ink55,
             }}
           >
             {t("noise_choice_locked")}
@@ -104,17 +102,17 @@ export function NoiseSeedPanel({
             style={{
               marginBottom: 12,
               padding: "10px 12px",
-              borderRadius: 10,
-              background: "rgba(255,70,50,0.08)",
-              border: "1px solid rgba(255,70,50,0.16)",
+              borderRadius: 8,
+              background: theme.redBg06,
+              border: `1px solid ${theme.redBorder16}`,
             }}
           >
             <div
               style={{
                 fontSize: 10,
                 ...mono,
-                letterSpacing: 1.6,
-                color: "rgba(255,120,120,0.9)",
+                letterSpacing: 0.8,
+                color: theme.red88,
                 marginBottom: 5,
               }}
             >
@@ -125,17 +123,17 @@ export function NoiseSeedPanel({
             style={{
               marginBottom: 12,
               padding: "10px 12px",
-              borderRadius: 10,
-              background: "rgba(255,170,40,0.08)",
-              border: "1px solid rgba(255,170,40,0.14)",
+              borderRadius: 8,
+              background: theme.plumBg07,
+              border: `1px solid ${theme.plumBorder18}`,
             }}
           >
             <div
               style={{
                 fontSize: 10,
                 ...mono,
-                letterSpacing: 1.4,
-                color: "rgba(255,170,40,0.82)",
+                letterSpacing: 0.8,
+                color: theme.plum72,
                 marginBottom: 5,
               }}
             >
@@ -147,7 +145,7 @@ export function NoiseSeedPanel({
                 margin: 0,
                 fontSize: 14,
                 lineHeight: 1.65,
-                color: "rgba(255,255,255,0.72)",
+                color: theme.ink65,
               }}
             >
               {t("merged_seed_hint")}
@@ -162,7 +160,7 @@ export function NoiseSeedPanel({
             marginBottom: 12,
             fontSize: 11,
             ...mono,
-            color: "rgba(255,255,255,0.38)",
+            color: theme.ink42,
             lineHeight: 1.7,
           }}
         >
@@ -178,19 +176,19 @@ export function NoiseSeedPanel({
               padding: "14px 16px",
               position: "relative",
               overflow: "hidden",
-              borderRadius: 10,
+              borderRadius: 8,
               background:
                 isGlitchStage && fragment.id === droppedFragmentId
-                  ? "rgba(255,70,50,0.12)"
-                  : fragment.mergeSource === "wildcard"
-                  ? "rgba(255,170,40,0.1)"
-                  : "rgba(255,170,40,0.04)",
+                  ? theme.redBg08
+                : fragment.mergeSource === "wildcard"
+                  ? theme.plumBg07
+                  : theme.mossBg06,
               border: `1px solid ${
                 isGlitchStage && fragment.id === droppedFragmentId
-                  ? "rgba(255,70,50,0.28)"
-                  : fragment.mergeSource === "wildcard"
-                  ? "rgba(255,170,40,0.28)"
-                  : "rgba(255,170,40,0.1)"
+                  ? theme.redBorder25
+                : fragment.mergeSource === "wildcard"
+                  ? theme.plumBorder18
+                  : theme.mossBorder16
               }`,
               animation:
                 isGlitchStage && fragment.id === droppedFragmentId
@@ -206,7 +204,7 @@ export function NoiseSeedPanel({
                   style={{
                     position: "absolute",
                     inset: 0,
-                    background: "rgba(255,40,40,0.08)",
+                    background: theme.redBg06,
                     pointerEvents: "none",
                   }}
                 />
@@ -218,9 +216,9 @@ export function NoiseSeedPanel({
                     top: "50%",
                     height: 4,
                     borderRadius: 999,
-                    background: "rgba(255,70,50,0.92)",
+                    background: theme.red88,
                     transform: "rotate(-5deg)",
-                    boxShadow: "0 0 14px rgba(255,70,50,0.5)",
+                    boxShadow: `0 0 14px ${theme.redBorder25}`,
                     animation: "redStrikeFlash 0.45s linear infinite",
                     pointerEvents: "none",
                   }}
@@ -241,8 +239,8 @@ export function NoiseSeedPanel({
                 style={{
                   fontSize: 9,
                   ...mono,
-                  letterSpacing: 2,
-                  color: "rgba(255,170,40,0.48)",
+                  letterSpacing: 0.8,
+                  color: theme.moss62,
                 }}
               >
                 {t("noise_card_label")} {index + 1}
@@ -254,19 +252,19 @@ export function NoiseSeedPanel({
                     borderRadius: 999,
                     background:
                       isGlitchStage && fragment.id === droppedFragmentId
-                        ? "rgba(255,70,50,0.18)"
-                        : fragment.mergeSource === "wildcard"
-                        ? "rgba(255,170,40,0.18)"
-                        : "rgba(255,255,255,0.05)",
+                        ? theme.redBorder16
+                      : fragment.mergeSource === "wildcard"
+                        ? theme.plumBg07
+                        : theme.inkBg05,
                     color:
                       isGlitchStage && fragment.id === droppedFragmentId
-                        ? "rgba(255,120,120,0.9)"
-                        : fragment.mergeSource === "wildcard"
-                        ? "rgba(255,170,40,0.9)"
-                        : "rgba(255,255,255,0.55)",
+                        ? theme.red9
+                      : fragment.mergeSource === "wildcard"
+                        ? theme.plum72
+                        : theme.ink55,
                     fontSize: 8,
                     ...mono,
-                    letterSpacing: 1.4,
+                    letterSpacing: 0.6,
                   }}
                 >
                   {isGlitchStage && fragment.id === droppedFragmentId
@@ -282,8 +280,8 @@ export function NoiseSeedPanel({
                 style={{
                   fontSize: 10,
                   ...mono,
-                  letterSpacing: 1.3,
-                  color: "rgba(255,170,40,0.72)",
+                  letterSpacing: 0.6,
+                  color: theme.plum72,
                   marginBottom: 8,
                 }}
               >
@@ -298,14 +296,14 @@ export function NoiseSeedPanel({
                 lineHeight: 1.7,
                 color:
                   isGlitchStage && fragment.id === droppedFragmentId
-                    ? "rgba(255,210,210,0.88)"
-                    : "rgba(255,255,255,0.84)",
+                    ? theme.red85
+                    : theme.ink8,
                 fontStyle: "italic",
                 textDecoration:
                   isGlitchStage && fragment.id === droppedFragmentId
                     ? "line-through"
                     : "none",
-                textDecorationColor: "rgba(255,70,50,0.92)",
+                textDecorationColor: theme.red88,
                 textDecorationThickness: 3,
               }}
             >

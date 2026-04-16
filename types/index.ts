@@ -32,6 +32,8 @@ export interface MergedNoisePlan {
   wildcardFragment: NoiseFragment | null;
 }
 
+export type AgeGroup = "youth" | "twenties" | "midcareer" | "senior";
+
 export interface Fields {
   age: string;
   location: string;
@@ -39,9 +41,17 @@ export interface Fields {
   resources: string;
   constraints: string;
   obsessions: string;
+  currentMode: string;
+  trajectoryFocus: string;
+  workStyle: string;
+  riskTolerance: string;
+  timeHorizon: string;
+  mobility: string;
+  inflection: string;
 }
 
 export type RunPhase = "idle" | "scanning" | "reviewing" | "ready" | "denoising" | "complete";
 export type WorkflowStage = "scan" | "curate" | "denoise";
 export type MergeRevealStage = "idle" | "holding" | "glitch" | "revealed";
 export type Language = "en" | "zh";
+export type QuestionnaireAnswers = Record<string, string[]>;

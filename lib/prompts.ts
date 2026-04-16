@@ -12,10 +12,17 @@ export function buildStateString(fields: Fields, big5: number[]): string {
   const parts: string[] = [];
   if (fields.age) parts.push(`Age: ${fields.age}`);
   if (fields.location) parts.push(`Location: ${fields.location}`);
+  if (fields.mobility) parts.push(`Mobility: ${fields.mobility}`);
+  if (fields.currentMode) parts.push(`Current chapter: ${fields.currentMode}`);
+  if (fields.trajectoryFocus) parts.push(`Current route tension: ${fields.trajectoryFocus}`);
   if (fields.skills) parts.push(`Skills: ${fields.skills}`);
   if (fields.resources) parts.push(`Resources & advantages: ${fields.resources}`);
   if (fields.constraints) parts.push(`Constraints: ${fields.constraints}`);
   if (fields.obsessions) parts.push(`Obsessions & drives: ${fields.obsessions}`);
+  if (fields.workStyle) parts.push(`Preferred way of winning: ${fields.workStyle}`);
+  if (fields.riskTolerance) parts.push(`Risk posture: ${fields.riskTolerance}`);
+  if (fields.timeHorizon) parts.push(`Time horizon: ${fields.timeHorizon}`);
+  if (fields.inflection) parts.push(`Near-term inflection point: ${fields.inflection}`);
   const traits = BIG5_KEYS.map((key, i) => {
     const val = big5[i];
     const level = val <= 3 ? "low" : val <= 5 ? "moderate" : val <= 7 ? "moderately high" : "high";
@@ -243,7 +250,8 @@ export function shuffleFragments<T>(fragments: T[]): T[] {
 
 export function buildMergedNoisePlan(
   selectedFragments: NoiseFragment[],
-  allFragments: NoiseFragment[] = selectedFragments
+  allFragments: NoiseFragment[] = selectedFragments,
+  enableWildcard = true
 ): MergedNoisePlan {
   if (selectedFragments.length === 0) {
     return { fragments: [], droppedFragment: null, wildcardFragment: null };
@@ -251,7 +259,7 @@ export function buildMergedNoisePlan(
   const selectedIds = new Set(selectedFragments.map((f) => f.id));
   const unselectedFragments = allFragments.filter((f) => !selectedIds.has(f.id));
   const shuffledSelected = shuffleFragments(selectedFragments);
-  const shouldSwapWildcard = unselectedFragments.length > 0 && shuffledSelected.length > 0;
+  const shouldSwapWildcard = enableWildcard && unselectedFragments.length > 0 && shuffledSelected.length > 0;
   const droppedFragment = shouldSwapWildcard
     ? shuffledSelected[shuffledSelected.length - 1]
     : null;

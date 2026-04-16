@@ -1,6 +1,7 @@
 "use client";
 
 import { useI18n } from "@/i18n";
+import { theme, mono } from "@/lib/theme";
 import type { WorkflowStage } from "@/types";
 
 interface WorkflowRailProps {
@@ -21,8 +22,10 @@ export function WorkflowRail({ stage }: WorkflowRailProps) {
       style={{
         display: "grid",
         gridTemplateColumns: "repeat(3, 1fr)",
-        gap: 10,
+        gap: 0,
         marginBottom: 24,
+        borderTop: `1px solid ${theme.mossBorder16}`,
+        borderBottom: `1px solid ${theme.mossBorder16}`,
       }}
     >
       {steps.map((item, index) => {
@@ -32,32 +35,28 @@ export function WorkflowRail({ stage }: WorkflowRailProps) {
           <div
             key={item.id}
             style={{
-              padding: "12px 14px",
-              borderRadius: 10,
-              border: `1px solid ${
-                isActive
-                  ? "rgba(255,170,40,0.28)"
-                  : isComplete
-                  ? "rgba(255,170,40,0.14)"
-                  : "rgba(255,255,255,0.06)"
-              }`,
+              padding: "14px 12px 12px",
+              borderRight:
+                index < steps.length - 1
+                  ? `1px solid ${theme.inkBorder07}`
+                  : "none",
               background: isActive
-                ? "rgba(255,170,40,0.08)"
+                ? theme.mossBg06
                 : isComplete
-                ? "rgba(255,170,40,0.04)"
-                : "rgba(255,255,255,0.02)",
+                ? "rgba(255,250,240,0.38)"
+                : "transparent",
             }}
           >
             <div
               style={{
                 fontSize: 9,
-                fontFamily: "'JetBrains Mono', monospace",
-                letterSpacing: 2,
+                ...mono,
+                letterSpacing: 0.6,
                 color: isActive
-                  ? "rgba(255,170,40,0.82)"
+                  ? theme.moss
                   : isComplete
-                  ? "rgba(255,170,40,0.48)"
-                  : "rgba(255,255,255,0.2)",
+                  ? theme.moss62
+                  : theme.ink3,
               }}
             >
               0{index + 1}
@@ -66,11 +65,11 @@ export function WorkflowRail({ stage }: WorkflowRailProps) {
               style={{
                 marginTop: 6,
                 fontSize: 11,
-                fontFamily: "'JetBrains Mono', monospace",
-                letterSpacing: 1.6,
+                ...mono,
+                letterSpacing: 0.4,
                 color: isActive
-                  ? "rgba(255,255,255,0.88)"
-                  : "rgba(255,255,255,0.34)",
+                  ? theme.ink85
+                  : theme.ink42,
               }}
             >
               {item.label}

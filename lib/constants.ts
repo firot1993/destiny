@@ -20,17 +20,6 @@ export const BIG5_KEYS = [
   "neuroticism",
 ] as const;
 
-export const BIG5_ICONS = ["◈", "◉", "◎", "◇", "◆"];
-
-export const INPUT_FIELDS = [
-  { key: "age", type: "short" },
-  { key: "location", type: "short" },
-  { key: "skills", type: "medium" },
-  { key: "resources", type: "medium" },
-  { key: "constraints", type: "medium" },
-  { key: "obsessions", type: "long" },
-] as const;
-
 export const NOISE_SCAN_COUNT = 10;
 export const MAX_KEPT_NOISE = 5;
 export const MAX_REMOVED_NOISE = NOISE_SCAN_COUNT - MAX_KEPT_NOISE;

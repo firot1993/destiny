@@ -110,6 +110,7 @@ export interface UseGenerationParams {
   model: string;
   lang: string;
   t: (key: string) => string;
+  enableWildcard: boolean;
 }
 
 export interface UseGenerationReturn {
@@ -153,6 +154,7 @@ export function useGeneration({
   model,
   lang,
   t,
+  enableWildcard,
 }: UseGenerationParams): UseGenerationReturn {
   const [isGenerating, setIsGenerating] = useState(false);
   const [runPhase, setRunPhase] = useState<RunPhase>("idle");
@@ -303,7 +305,7 @@ export function useGeneration({
   ) => {
     setKeptNoiseFragments(selectedFragments);
     setMergedNoisePlan(
-      buildMergedNoisePlan(selectedFragments, noiseFragments)
+      buildMergedNoisePlan(selectedFragments, noiseFragments, enableWildcard)
     );
     setCurrentNoiseIndex(nextNoiseIndex);
     setRunPhase("ready");
@@ -398,7 +400,7 @@ export function useGeneration({
 
     const stateStr = buildStateString(fields, big5);
     const activeMergedNoisePlan =
-      mergedNoisePlan ?? buildMergedNoisePlan(keptNoiseFragments, noiseFragments);
+      mergedNoisePlan ?? buildMergedNoisePlan(keptNoiseFragments, noiseFragments, enableWildcard);
     const mergedNoiseSeed = buildMergedNoiseSeed(activeMergedNoisePlan.fragments);
 
     setIsGenerating(true);

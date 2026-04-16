@@ -2,14 +2,13 @@
 
 import { useI18n } from "@/i18n";
 import { getStepLabel } from "@/lib/prompts";
+import { theme, mono } from "@/lib/theme";
 
 interface StepIndicatorProps {
   currentStep: number;
   totalSteps: number;
   isGenerating: boolean;
 }
-
-const mono = { fontFamily: "'JetBrains Mono', monospace" };
 
 export function StepIndicator({
   currentStep,
@@ -45,19 +44,19 @@ export function StepIndicator({
               ...mono,
               background:
                 i < currentStep
-                  ? "rgba(255,170,40,0.9)"
+                  ? theme.moss
                   : i === currentStep && isGenerating
-                  ? "rgba(255,170,40,0.2)"
-                  : "rgba(255,255,255,0.04)",
+                  ? theme.mossBg09
+                  : theme.inkBg05,
               color:
                 i < currentStep
-                  ? "#08080e"
+                  ? theme.surface
                   : i === currentStep && isGenerating
-                  ? "rgba(255,170,40,0.9)"
-                  : "rgba(255,255,255,0.15)",
+                  ? theme.moss
+                  : theme.ink28,
               border:
                 i === currentStep && isGenerating
-                  ? "1px solid rgba(255,170,40,0.4)"
+                  ? `1px solid ${theme.mossBorder24}`
                   : "1px solid transparent",
               transition: "all 0.5s ease",
               animation:
@@ -75,8 +74,8 @@ export function StepIndicator({
                 height: 1,
                 background:
                   i < currentStep
-                    ? "rgba(255,170,40,0.3)"
-                    : "rgba(255,255,255,0.04)",
+                    ? theme.mossBorder24
+                    : theme.inkBorder08,
               }}
             />
           )}
@@ -87,8 +86,8 @@ export function StepIndicator({
           marginLeft: 6,
           fontSize: 10,
           ...mono,
-          color: "rgba(255,255,255,0.25)",
-          letterSpacing: 1,
+          color: theme.ink38,
+          letterSpacing: 0.6,
         }}
       >
         {isGenerating ? getStepLabel(currentStep, totalSteps, t) : ""}

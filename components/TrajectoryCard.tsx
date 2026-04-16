@@ -1,21 +1,21 @@
 "use client";
 
 import { useState } from "react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { useI18n } from "@/i18n";
 import { getStepLabel } from "@/lib/prompts";
+import { theme, mono } from "@/lib/theme";
 
 interface TrajectoryCardProps {
   trajectory: string;
   index: number;
   stepOutputs?: string[];
-  totalSteps: number;
 }
 
 export function TrajectoryCard({
   trajectory,
   index,
   stepOutputs,
-  totalSteps,
 }: TrajectoryCardProps) {
   const [showSteps, setShowSteps] = useState(false);
   const { t } = useI18n();
@@ -24,9 +24,9 @@ export function TrajectoryCard({
     <div
       className="trajectory-card"
       style={{
-        background: "rgba(255,255,255,0.025)",
-        border: "1px solid rgba(255,255,255,0.08)",
-        borderRadius: 14,
+        background: "rgba(255,250,240,0.62)",
+        border: `1px solid ${theme.mossBorder16}`,
+        borderRadius: 8,
         padding: 28,
         marginBottom: 16,
         position: "relative",
@@ -39,9 +39,9 @@ export function TrajectoryCard({
           top: 16,
           right: 20,
           fontSize: 11,
-          fontFamily: "'JetBrains Mono', monospace",
-          color: "rgba(255,170,40,0.6)",
-          letterSpacing: 2,
+          ...mono,
+          color: theme.moss78,
+          letterSpacing: 0.8,
           fontWeight: 600,
         }}
       >
@@ -50,7 +50,7 @@ export function TrajectoryCard({
       <p
         className="serif"
         style={{
-          color: "#fff",
+          color: theme.ink85,
           fontSize: 16,
           lineHeight: 1.85,
           margin: 0,
@@ -65,17 +65,24 @@ export function TrajectoryCard({
             onClick={() => setShowSteps(!showSteps)}
             style={{
               background: "none",
-              border: "1px solid rgba(255,255,255,0.07)",
-              borderRadius: 6,
+              border: `1px solid ${theme.mossBorder16}`,
+              borderRadius: 8,
               padding: "5px 12px",
-              color: "rgba(255,255,255,0.25)",
+              color: theme.moss62,
               fontSize: 10,
               cursor: "pointer",
-              fontFamily: "'JetBrains Mono', monospace",
-              letterSpacing: 1,
+              ...mono,
+              letterSpacing: 0.6,
             }}
           >
-            {showSteps ? t("hide_steps") : t("show_steps")}
+            <span className="icon-text">
+              {showSteps ? (
+                <ChevronUp size={13} strokeWidth={1.9} aria-hidden="true" />
+              ) : (
+                <ChevronDown size={13} strokeWidth={1.9} aria-hidden="true" />
+              )}
+              {showSteps ? t("hide_steps") : t("show_steps")}
+            </span>
           </button>
           {showSteps && (
             <div style={{ marginTop: 14 }}>
@@ -88,8 +95,8 @@ export function TrajectoryCard({
                     style={{
                       padding: "14px 18px",
                       marginBottom: 6,
-                      background: `rgba(255,170,40,${0.015 + p * 0.03})`,
-                      borderLeft: `2px solid rgba(255,170,40,${0.12 + p * 0.5})`,
+                      background: `rgba(38,84,68,${0.035 + p * 0.055})`,
+                      borderLeft: `2px solid rgba(38,84,68,${0.16 + p * 0.44})`,
                       borderRadius: "0 8px 8px 0",
                       animationDelay: `${si * 0.08}s`,
                     }}
@@ -97,25 +104,25 @@ export function TrajectoryCard({
                     <div
                       style={{
                         fontSize: 10,
-                        fontFamily: "'JetBrains Mono', monospace",
-                        color: `rgba(255,170,40,${0.5 + p * 0.5})`,
+                        ...mono,
+                        color: `rgba(38,84,68,${0.58 + p * 0.32})`,
                         marginBottom: 6,
-                        letterSpacing: 2,
+                        letterSpacing: 0.8,
                         fontWeight: 600,
                       }}
                     >
-                      STEP {si + 1} — {getStepLabel(si, stepOutputs.length, t)}
+                      Step {si + 1} — {getStepLabel(si, stepOutputs.length, t)}
                     </div>
                     <p
                       style={{
-                        color: `rgba(255,255,255,${0.6 + p * 0.4})`,
+                        color: `rgba(0,0,0,${0.55 + p * 0.3})`,
                         fontSize: 14,
                         lineHeight: 1.7,
                         margin: 0,
                         fontFamily:
                           p < 0.4
-                            ? "'JetBrains Mono', monospace"
-                            : "'Source Serif 4', 'Noto Serif SC', Georgia, serif",
+                            ? mono.fontFamily
+                            : "var(--serif-zh)",
                         fontStyle: si === 0 ? "italic" : "normal",
                       }}
                     >

@@ -1,7 +1,9 @@
 "use client";
 
+import { Check, X } from "lucide-react";
 import { useI18n } from "@/i18n";
 import { MAX_KEPT_NOISE } from "@/lib/constants";
+import { theme, mono, labelStyles } from "@/lib/theme";
 import type { NoiseFragment } from "@/types";
 
 interface NoiseReviewCardProps {
@@ -29,16 +31,15 @@ export function NoiseReviewCard({
 }: NoiseReviewCardProps) {
   const { t } = useI18n();
   const keepSlotsLeft = Math.max(0, MAX_KEPT_NOISE - keptCount);
-  const mono = { fontFamily: "'JetBrains Mono', monospace" };
 
   return (
     <div
       style={{
         marginBottom: 24,
         padding: "22px 22px 20px",
-        borderRadius: 14,
-        border: "1px solid rgba(255,255,255,0.08)",
-        background: "rgba(255,255,255,0.025)",
+        borderRadius: 8,
+        border: `1px solid ${theme.mossBorder16}`,
+        background: "rgba(255,250,240,0.58)",
       }}
     >
       <div
@@ -52,10 +53,9 @@ export function NoiseReviewCard({
       >
         <div
           style={{
-            fontSize: 9,
-            ...mono,
-            letterSpacing: 2,
-            color: "rgba(255,170,40,0.52)",
+            ...labelStyles.micro,
+            letterSpacing: 0.8,
+            color: theme.moss78,
           }}
         >
           {t("noise_card_label")} {currentIndex} / {totalCount}
@@ -65,11 +65,11 @@ export function NoiseReviewCard({
             style={{
               padding: "5px 9px",
               borderRadius: 999,
-              background: "rgba(255,170,40,0.08)",
-              color: "rgba(255,170,40,0.78)",
+              background: theme.mossBg09,
+              color: theme.moss,
               fontSize: 9,
               ...mono,
-              letterSpacing: 1.2,
+              letterSpacing: 0.8,
             }}
           >
             {keptCount} / {MAX_KEPT_NOISE} {t("noise_kept")}
@@ -78,11 +78,11 @@ export function NoiseReviewCard({
             style={{
               padding: "5px 9px",
               borderRadius: 999,
-              background: "rgba(255,255,255,0.04)",
-              color: "rgba(255,255,255,0.44)",
+              background: theme.inkBg04,
+              color: theme.ink5,
               fontSize: 9,
               ...mono,
-              letterSpacing: 1.2,
+              letterSpacing: 0.8,
             }}
           >
             {keepSlotsLeft} {t("noise_keep_slots_left")}
@@ -96,7 +96,7 @@ export function NoiseReviewCard({
           margin: "0 0 18px",
           fontSize: 17,
           lineHeight: 1.85,
-          color: "rgba(255,255,255,0.9)",
+          color: theme.ink85,
           fontStyle: "italic",
         }}
       >
@@ -109,7 +109,7 @@ export function NoiseReviewCard({
           margin: "0 0 18px",
           fontSize: 14,
           lineHeight: 1.7,
-          color: "rgba(255,255,255,0.58)",
+          color: theme.ink55,
         }}
       >
         {t("noise_review_hint")}
@@ -121,34 +121,40 @@ export function NoiseReviewCard({
           disabled={isBusy || disableRemove}
           style={{
             padding: "16px 0",
-            borderRadius: 10,
-            border: "1px solid rgba(255,90,90,0.18)",
-            background: "rgba(255,70,50,0.08)",
-            color: "rgba(255,120,120,0.85)",
+            borderRadius: 8,
+            border: `1px solid ${theme.redBorder18}`,
+            background: theme.redBg06,
+            color: theme.red85,
             fontSize: 11,
             ...mono,
-            letterSpacing: 2,
+            letterSpacing: 1,
             cursor: isBusy ? "default" : "pointer",
           }}
         >
-          {t("noise_remove_action")}
+          <span className="icon-text">
+            <X size={14} strokeWidth={2} aria-hidden="true" />
+            {t("noise_remove_action")}
+          </span>
         </button>
         <button
           onClick={onKeep}
           disabled={isBusy || disableKeep}
           style={{
             padding: "16px 0",
-            borderRadius: 10,
-            border: "1px solid rgba(255,170,40,0.24)",
-            background: "rgba(255,170,40,0.1)",
-            color: "rgba(255,170,40,0.88)",
+            borderRadius: 8,
+            border: `1px solid ${theme.mossBorder24}`,
+            background: theme.mossBg09,
+            color: theme.moss,
             fontSize: 11,
             ...mono,
-            letterSpacing: 2,
+            letterSpacing: 1,
             cursor: isBusy ? "default" : "pointer",
           }}
         >
-          {t("noise_keep_action")}
+          <span className="icon-text">
+            {t("noise_keep_action")}
+            <Check size={14} strokeWidth={2} aria-hidden="true" />
+          </span>
         </button>
       </div>
     </div>
