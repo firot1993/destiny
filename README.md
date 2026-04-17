@@ -2,121 +2,98 @@
 
 A "diffusion model" for life trajectories. Input your current state, set guidance toward the phenomenal, and sample possible extraordinary futures.
 
-Uses iterative LLM refinement to simulate denoising — starting from noise and progressively sharpening into coherent life trajectories.
+Uses iterative LLM refinement to simulate denoising — starting from noise fragments and progressively sharpening them into coherent life trajectories.
 
 ## Architecture
 
 ```
-┌─────────────────┐      ┌──────────────────┐      ┌─────────────────┐
-│  GitHub Pages   │ ──── │  CF Worker Proxy  │ ──── │  Anthropic API  │
-│  (Vite + React) │      │  (holds API key)  │      │  or OpenRouter  │
-└─────────────────┘      └──────────────────┘      └─────────────────┘
+┌──────────────────────────┐      ┌──────────────────────────────┐
+│  Next.js App (React UI)  │ ───▶ │  /api/generate Route Handler │
+│  app/page.tsx            │      │  app/api/generate/route.ts   │
+└──────────────────────────┘      └──────────────┬───────────────┘
+                                                 │
+                        ┌────────────────────────┼────────────────────────┐
+                        ▼                        ▼                        ▼
+                  Anthropic API           OpenRouter API         xAI / Google Gemini
+```
+
+All provider responses are normalized to Anthropic's format before returning to the client. Rate limiting uses Upstash Redis (per-IP per-minute + global daily cap).
+
+## Repository Structure
+
+```
+app/                Next.js App Router (pages + API routes)
+  page.tsx          Main UI — state machine and generation pipeline
+  api/generate/     POST endpoint — provider routing + rate limiting
+components/         Modular React components (Big5Form, NoiseSeedPanel, etc.)
+hooks/              useGeneration.ts — generation pipeline logic
+i18n/               Context-based i18n (English, Chinese, Japanese, Korean)
+lib/                constants, prompts, providers, rateLimit
+types/              Shared TypeScript types
+doc/                Plans, architecture notes, worklogs
 ```
 
 ## Quick Start
 
-### 1. Deploy the Worker (API proxy)
-
 ```bash
-cd worker
 npm install
-
-# Set your API keys as secrets
-wrangler secret put ANTHROPIC_API_KEY
-wrangler secret put OPENROUTER_API_KEY
-
-# Optional: restrict to your domain
-# Edit wrangler.toml → ALLOWED_ORIGINS = "https://yourusername.github.io"
-
-wrangler deploy
+cp .env.local.example .env.local   # then fill in keys
+npm run dev
 ```
 
-Note your worker URL: `https://destiny-proxy.yourusername.workers.dev`
+Open `http://localhost:3000`.
 
-### 2. Configure the Frontend
+### Environment Variables
+
+```
+ANTHROPIC_API_KEY=
+OPENROUTER_API_KEY=
+XAI_API_KEY=               # optional
+GOOGLE_API_KEY=            # optional
+UPSTASH_REDIS_REST_URL=    # optional — enables rate limiting
+UPSTASH_REDIS_REST_TOKEN=  # optional
+MAX_REQUESTS_PER_DAY=1000  # optional, default 1000
+```
+
+## Commands
 
 ```bash
-cd frontend
-npm install
+npm run dev       # local dev server
+npm run build     # production build
+npm run start     # run production build locally
+npm run lint      # ESLint
 ```
 
-Edit `vite.config.js`:
-```js
-base: '/destiny/',  // ← your repo name
-```
+## Generation Pipeline
 
-Optionally set default API URL in `.env`:
-```
-VITE_API_URL=https://destiny-proxy.yourusername.workers.dev
-```
-
-### 3. Deploy Frontend
-
-**Option A: GitHub Actions (automatic)**
-
-Push to `main` branch. The workflow in `.github/workflows/deploy.yml` handles the rest.
-
-Make sure GitHub Pages is enabled:
-- Repo Settings → Pages → Source → GitHub Actions
-
-**Option B: Manual**
-
-```bash
-cd frontend
-npm run build
-# Copy dist/ contents to gh-pages branch
-```
-
-### 4. Use It
-
-1. Open `https://yourusername.github.io/destiny/`
-2. Click ⚙ to set your Worker URL (if not set via env)
-3. Choose provider (Anthropic / OpenRouter)
-4. Fill in your state → personality → generate
+1. **Scan** — LLM generates 10 raw noise fragments (4–12 words each).
+2. **Curate** — User keeps up to 5 fragments; one random unselected fragment is auto-injected as a "wildcard".
+3. **Denoise** — Multi-step refinement loop (2–8 steps). Each step feeds the previous output as context; Big Five scores and guidance scale (1–10) are included in every prompt.
+   - Steps 1–40%: add structure and causality
+   - Steps 40–70%: sharpen specificity and turning points
+   - Steps 70–100%: emotional depth and inevitability
+   - Final step: polished 8–12 sentence narrative
 
 ## Features
 
 - **Structured input** — age, location, skills, resources, constraints, obsessions
 - **Big Five personality** — shapes HOW trajectories unfold, not just what happens
-- **Adjustable denoising steps** (2-8) — more steps = finer refinement
-- **Guidance scale** (1-10) — 1 = quiet life, 10 = biography-worthy
+- **Adjustable denoising steps** (2–8) — more steps = finer refinement
+- **Guidance scale** (1–10) — 1 = quiet life, 10 = biography-worthy
 - **Multiple samples** — parallel trajectories from the same starting point
-- **i18n** — English & Chinese (中文)
-- **Dual provider** — Anthropic direct or OpenRouter
+- **i18n** — English, Chinese, Japanese, Korean
+- **Multi-provider** — Anthropic, OpenRouter, xAI, Google Gemini
 
 ## Rate Limiting
 
-The worker now uses two separate mechanisms:
+Optional, enabled when `UPSTASH_REDIS_REST_URL` is set:
 
-- Global daily limit: a Durable Object enforces the shared `MAX_REQUESTS_PER_DAY` cap exactly.
-- Per-IP per-minute limit: optional KV-backed throttling via `RATE_LIMIT`.
-
-The Durable Object binding and migration are already declared in `worker/wrangler.toml`, so `wrangler deploy` will provision the daily-limit backend automatically.
-
-If you also want the optional per-IP minute limiter, create a KV namespace:
-
-```bash
-cd worker
-wrangler kv:namespace create RATE_LIMIT
-
-# Add the returned ID to wrangler.toml
-# Uncomment the [[kv_namespaces]] section
-```
-
-## Local Development
-
-```bash
-# Terminal 1: Worker
-cd worker && wrangler dev
-
-# Terminal 2: Frontend
-cd frontend && npm run dev
-```
+- **Per-minute**: IP-based throttling via Upstash Redis
+- **Per-day**: Global cap via Upstash Redis counter; quota returned in `X-Daily-Remaining` / `X-Daily-Limit` response headers and cached client-side in localStorage
 
 ## Tech Stack
 
-- **Frontend**: Vite + React 18
-- **Proxy**: Cloudflare Workers
-- **LLM**: Claude Sonnet 4 (via Anthropic or OpenRouter)
-- **Hosting**: GitHub Pages + Cloudflare (both free tier)
+- **Framework**: Next.js (App Router) + React
+- **LLM providers**: Anthropic, OpenRouter, xAI, Google Gemini
+- **Rate limiting**: Upstash Redis
 - **i18n**: Lightweight React Context (no dependencies)
