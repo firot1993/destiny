@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import {
   ArrowLeft,
   Languages,
@@ -16,8 +16,9 @@ import { Big5Form } from "@/components/Big5Form";
 import { WorkflowRail } from "@/components/WorkflowRail";
 import { StepIndicator } from "@/components/StepIndicator";
 import { TrajectoryCard } from "@/components/TrajectoryCard";
-import { NoiseReviewCard } from "@/components/NoiseReviewCard";
-import { NoiseSeedPanel } from "@/components/NoiseSeedPanel";
+import { BulletField } from "@/components/BulletField";
+import { AmmoHUD } from "@/components/AmmoHUD";
+import { FireImpact } from "@/components/FireImpact";
 import { buildFieldsFromAnswers } from "@/lib/questionnaire";
 import { PROVIDERS, DEFAULT_PROVIDER } from "@/lib/constants";
 import { theme, mono, labelStyles } from "@/lib/theme";
@@ -52,10 +53,69 @@ const profileAccentChipStyle: React.CSSProperties = {
   color: theme.moss78,
 };
 
+const buttonStyles = {
+  primary: {
+    width: "100%",
+    padding: "18px 0",
+    background: theme.moss,
+    border: `1px solid ${theme.mossBorder24}`,
+    borderRadius: 8,
+    cursor: "pointer",
+    color: theme.paper,
+    fontSize: 12,
+    ...mono,
+    fontWeight: 600,
+    letterSpacing: 1.5,
+    transition: "all 0.3s ease",
+  } as React.CSSProperties,
+  stop: {
+    width: "100%",
+    padding: "18px 0",
+    background: theme.redBg08,
+    border: `1px solid ${theme.redBorder22}`,
+    borderRadius: 8,
+    cursor: "pointer",
+    color: theme.red85,
+    fontSize: 12,
+    ...mono,
+    fontWeight: 600,
+    letterSpacing: 1.5,
+    transition: "all 0.3s ease",
+  } as React.CSSProperties,
+  secondary: {
+    width: "100%",
+    padding: "12px 0",
+    marginTop: 10,
+    background: "none",
+    border: `1px solid ${theme.inkBorder08}`,
+    borderRadius: 8,
+    cursor: "pointer",
+    color: theme.ink38,
+    fontSize: 10,
+    ...mono,
+    letterSpacing: 1,
+  } as React.CSSProperties,
+  fire: {
+    width: "100%",
+    padding: "18px 0",
+    background: theme.moss,
+    border: `1px solid ${theme.mossBorder24}`,
+    borderRadius: 8,
+    cursor: "pointer",
+    color: theme.paper,
+    fontSize: 12,
+    ...mono,
+    fontWeight: 700,
+    letterSpacing: 1.5,
+    transition: "all 0.3s ease",
+    transform: "rotate(-1deg)",
+    boxShadow: `3px 3px 0 ${theme.ink8}`,
+  } as React.CSSProperties,
+};
+
 export default function Home() {
   const { t, lang, toggleLang } = useI18n();
 
-  // Page / settings state
   const [page, setPage] = useState<PageTab>("input");
   const [showSettings, setShowSettings] = useState(false);
   const [questionnaireAnswers, setQuestionnaireAnswers] =
@@ -65,13 +125,12 @@ export default function Home() {
   const [denoiseSteps, setDenoiseSteps] = useState(4);
   const [provider, setProvider] = useState(DEFAULT_PROVIDER);
   const [model, setModel] = useState(PROVIDERS[DEFAULT_PROVIDER][0]);
-  const [enableWildcard, setEnableWildcard] = useState(true);
+  const [fireImpactActive, setFireImpactActive] = useState(false);
   const fields = useMemo(() => buildFieldsFromAnswers(questionnaireAnswers), [questionnaireAnswers]);
 
   const updateBig5 = (idx: number, val: number) =>
     setBig5((b) => { const n = [...b]; n[idx] = val; return n; });
 
-  // Generation hook
   const gen = useGeneration({
     fields,
     big5,
@@ -81,8 +140,22 @@ export default function Home() {
     model,
     lang,
     t,
-    enableWildcard,
   });
+
+  const handleFire = useCallback(() => {
+    setFireImpactActive(true);
+  }, []);
+
+  const handleFireImpactComplete = useCallback(() => {
+    setFireImpactActive(false);
+    gen.generate();
+  }, [gen]);
+
+  const handlePassComplete = useCallback((bulletId: number) => {
+    gen.ricochetSingle(bulletId);
+  }, [gen]);
+
+  const caughtCount = gen.bullets.filter((b) => b.status === "caught").length;
 
   const guidanceLabels = useMemo(() => [
     "",
@@ -93,7 +166,6 @@ export default function Home() {
     <div data-lang={lang} className="page-shell">
       <main className="page-frame">
 
-        {/* ─── Header ─── */}
         <header className="page-header">
           <div>
             <div className="page-kicker">{t("subtitle")}</div>
@@ -132,7 +204,6 @@ export default function Home() {
           </div>
         </header>
 
-        {/* ─── Settings panel ─── */}
         {showSettings && (
           <div className="settings-panel">
             <div
@@ -224,7 +295,6 @@ export default function Home() {
           </div>
         )}
 
-        {/* ─── Tabs ─── */}
         <nav className="page-tabs" aria-label="Destiny setup steps">
           {(
             [
@@ -244,7 +314,6 @@ export default function Home() {
           ))}
         </nav>
 
-        {/* ─── PAGE 1: STATE ─── */}
         {page === "input" && (
           <InputForm
             answers={questionnaireAnswers}
@@ -253,7 +322,6 @@ export default function Home() {
           />
         )}
 
-        {/* ─── PAGE 2: BIG FIVE ─── */}
         {page === "big5" && (
           <Big5Form
             big5={big5}
@@ -263,12 +331,10 @@ export default function Home() {
           />
         )}
 
-        {/* ─── PAGE 3: GENERATE ─── */}
         {page === "generate" && (
           <div
             style={{ animation: "fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) both" }}
           >
-            {/* Encoded state summary */}
             <div
               style={{
                 padding: "18px 22px",
@@ -331,7 +397,6 @@ export default function Home() {
 
             <WorkflowRail stage={gen.workflowStage} />
 
-            {/* Guidance + Steps sliders */}
             <div
               style={{
                 display: "grid",
@@ -420,85 +485,12 @@ export default function Home() {
                     lineHeight: 1.7,
                   }}
                 >
-                  {t("latent_scan_rule")}
+                  {t("curate_stage_hint")}
                 </div>
               </div>
             </div>
 
-            {/* Wildcard toggle */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                padding: "12px 16px",
-                marginBottom: 32,
-                marginTop: -12,
-                background: theme.inkBg025,
-                border: `1px solid ${theme.mossBorder16}`,
-                borderRadius: 8,
-              }}
-            >
-              <div>
-                <div
-                  style={{
-                    fontSize: 10,
-                    ...mono,
-                    color: theme.ink5,
-                    fontWeight: 500,
-                    letterSpacing: 0.6,
-                    marginBottom: 3,
-                  }}
-                >
-                  {t("wildcard_label")}
-                </div>
-                <div
-                  style={{
-                    fontSize: 11,
-                    color: theme.ink38,
-                    ...mono,
-                  }}
-                >
-                  {t("wildcard_hint")}
-                </div>
-              </div>
-              <button
-                role="switch"
-                aria-checked={enableWildcard}
-                aria-label={t("wildcard_label")}
-                onClick={() => setEnableWildcard((v) => !v)}
-                style={{
-                  flexShrink: 0,
-                  marginLeft: 16,
-                  width: 44,
-                  height: 24,
-                  borderRadius: 999,
-                  border: "none",
-                  cursor: "pointer",
-                  background: enableWildcard
-                    ? theme.moss78
-                    : theme.inkBorder12,
-                  position: "relative",
-                  transition: "background 0.2s ease",
-                }}
-              >
-                <span
-                  style={{
-                    position: "absolute",
-                    top: 3,
-                    left: enableWildcard ? 23 : 3,
-                    width: 18,
-                    height: 18,
-                    borderRadius: "50%",
-                    background: theme.surface,
-                    transition: "left 0.2s ease",
-                  }}
-                />
-              </button>
-            </div>
-
-            {/* Empty noise placeholder */}
-            {gen.noiseFragments.length === 0 && !gen.isGenerating && (
+            {gen.bullets.length === 0 && !gen.isGenerating && (
               <div
                 style={{
                   marginBottom: 24,
@@ -525,188 +517,75 @@ export default function Home() {
               </div>
             )}
 
-            {/* Fragment review card */}
-            {gen.currentNoiseFragment && (
-              <NoiseReviewCard
-                fragment={gen.currentNoiseFragment}
-                currentIndex={gen.currentNoiseIndex + 1}
-                totalCount={gen.noiseFragments.length}
-                keptCount={gen.keptNoiseFragments.length}
-                onRemove={() => gen.decideCurrentNoise("remove")}
-                onKeep={() => gen.decideCurrentNoise("keep")}
-                disableRemove={!gen.canRemoveCurrentNoise}
-                disableKeep={!gen.canKeepCurrentNoise}
-                isBusy={gen.isGenerating}
-              />
-            )}
-
-            {/* Post-review summary */}
-            {gen.noiseFragments.length > 0 && !gen.currentNoiseFragment && (
-              <div
-                style={{
-                  marginBottom: 24,
-                  padding: "18px 22px",
-                  background: theme.inkBg025,
-                  border: `1px solid ${theme.inkBorder07}`,
-                  borderRadius: 8,
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    gap: 10,
-                    flexWrap: "wrap",
-                    alignItems: "center",
-                    marginBottom: 10,
-                  }}
-                >
-                  <div style={{ ...labelStyles.section, marginBottom: 0 }}>
-                    {t("noise_title")}
-                  </div>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <div
-                      style={{
-                        padding: "5px 9px",
-                        borderRadius: 999,
-                        background: theme.mossBg09,
-                        color: theme.moss,
-                        fontSize: 9,
-                        ...mono,
-                        letterSpacing: 0.8,
-                      }}
-                    >
-                      {gen.keptNoiseFragments.length} / 5 {t("noise_kept")}
-                    </div>
-                    <div
-                      style={{
-                        padding: "5px 9px",
-                        borderRadius: 999,
-                        background: theme.inkBg04,
-                        color: theme.ink5,
-                        fontSize: 9,
-                        ...mono,
-                        letterSpacing: 0.8,
-                      }}
-                    >
-                      {gen.removedNoiseCount} / 5 {t("noise_deleted")}
-                    </div>
-                  </div>
-                </div>
-                <p
-                  className="serif"
-                  style={{
-                    margin: 0,
-                    fontSize: 15,
-                    lineHeight: 1.75,
-                    color: theme.ink6,
-                  }}
-                >
-                  {gen.isMergeRevealPending
-                    ? t("noise_choice_locked")
-                    : t("noise_ready_hint")}
-                </p>
+            {(gen.runPhase === "reviewing" || gen.runPhase === "ready") && (
+              <div style={{ position: "relative", marginBottom: 24 }}>
+                <AmmoHUD bullets={gen.bullets} />
+                <BulletField
+                  bullets={gen.bullets}
+                  onCatch={gen.catchBullet}
+                  onPassComplete={handlePassComplete}
+                />
               </div>
             )}
 
-            <NoiseSeedPanel
-              keptFragments={gen.keptNoiseFragments}
-              mergedPlan={gen.mergedNoisePlan}
-              showMergedState={
-                !gen.currentNoiseFragment && gen.noiseFragments.length > 0
-              }
-              revealStage={gen.mergeRevealStage}
-            />
+            <FireImpact active={fireImpactActive} onComplete={handleFireImpactComplete} />
 
-            {/* Main action button */}
-            {!gen.currentNoiseFragment && (
+            {gen.bullets.length === 0 && !gen.isGenerating && (
               <button
-                onClick={
-                  gen.isGenerating
-                    ? gen.stopGeneration
-                    : gen.noiseFragments.length > 0
-                    ? gen.denoiseSelectedNoise
-                    : gen.scanNoiseFragments
-                }
-                disabled={
-                  (!gen.isGenerating &&
-                    gen.noiseFragments.length > 0 &&
-                    gen.keptNoiseFragments.length === 0) ||
-                  (!gen.isGenerating && gen.isMergeRevealPending)
-                }
-                style={{
-                  width: "100%",
-                  padding: "18px 0",
-                  background: gen.isGenerating
-                    ? theme.redBg08
-                    : theme.moss,
-                  border: `1px solid ${
-                    gen.isGenerating
-                      ? theme.redBorder22
-                      : theme.mossBorder24
-                  }`,
-                  borderRadius: 8,
-                  cursor: "pointer",
-                  color: gen.isGenerating
-                    ? theme.red85
-                    : theme.paper,
-                  fontSize: 12,
-                  ...mono,
-                  fontWeight: 600,
-                  letterSpacing: 1.5,
-                  transition: "all 0.3s ease",
-                  opacity:
-                    (!gen.isGenerating &&
-                      gen.noiseFragments.length > 0 &&
-                      gen.keptNoiseFragments.length === 0) ||
-                    (!gen.isGenerating && gen.isMergeRevealPending)
-                      ? 0.3
-                      : 1,
-                }}
+                onClick={gen.scanNoiseFragments}
+                style={buttonStyles.primary}
               >
                 <span className="icon-text">
-                  {gen.isGenerating ? (
-                    <Square size={13} strokeWidth={2} aria-hidden="true" />
-                  ) : (
-                    <Play size={13} strokeWidth={2} aria-hidden="true" />
-                  )}
-                  {gen.isGenerating
-                    ? t("btn_stop")
-                    : gen.isMergeRevealPending
-                    ? t("btn_preparing_merge")
-                    : gen.noiseFragments.length > 0
-                    ? t("btn_denoise_merged")
-                    : t("btn_scan_noise")}
+                  <Play size={13} strokeWidth={2} aria-hidden="true" />
+                  {t("btn_scan_noise")}
                 </span>
               </button>
             )}
 
-            {/* Rescan button */}
-            {gen.noiseFragments.length > 0 && !gen.isGenerating && (
+            {gen.runPhase === "reviewing" && (
               <button
-                onClick={gen.scanNoiseFragments}
+                onClick={gen.reloadScan}
+                disabled={gen.isGenerating}
                 style={{
-                  width: "100%",
-                  padding: "12px 0",
-                  marginTop: 10,
-                  background: "none",
-                  border: `1px solid ${theme.inkBorder08}`,
-                  borderRadius: 8,
-                  cursor: "pointer",
-                  color: theme.ink38,
-                  fontSize: 10,
-                  ...mono,
-                  letterSpacing: 1,
+                  ...buttonStyles.secondary,
+                  opacity: gen.isGenerating ? 0.5 : 1,
                 }}
               >
                 <span className="icon-text">
                   <RefreshCw size={13} strokeWidth={1.9} aria-hidden="true" />
-                  {t("btn_rescan")}
+                  [ {t("bullet_reload")} ]
                 </span>
               </button>
             )}
 
-            {/* Daily quota */}
+            {gen.runPhase === "ready" && (
+              <button
+                onClick={handleFire}
+                disabled={gen.isGenerating || fireImpactActive}
+                style={{
+                  ...buttonStyles.fire,
+                  opacity: gen.isGenerating || fireImpactActive ? 0.5 : 1,
+                }}
+              >
+                <span className="icon-text">
+                  <Play size={13} strokeWidth={2} aria-hidden="true" />
+                  [ {t("bullet_fire")} ]
+                </span>
+              </button>
+            )}
+
+            {gen.isGenerating && gen.runPhase === "denoising" && (
+              <button
+                onClick={gen.stopGeneration}
+                style={buttonStyles.stop}
+              >
+                <span className="icon-text">
+                  <Square size={13} strokeWidth={2} aria-hidden="true" />
+                  {t("btn_stop")}
+                </span>
+              </button>
+            )}
+
             {gen.dailyRemaining !== null && gen.dailyLimit !== null && (
               <div
                 style={{
@@ -724,7 +603,6 @@ export default function Home() {
               </div>
             )}
 
-            {/* Progress */}
             {gen.isGenerating && (
               <div
                 style={{
@@ -743,7 +621,7 @@ export default function Home() {
                 >
                   {gen.runPhase === "scanning"
                     ? t("progress_scanning")
-                    : `${t("progress_denoising")} ${gen.keptNoiseFragments.length} ${t("merged_signals_label")}`}
+                    : `${t("progress_denoising")} ${caughtCount} ${t("merged_signals_label")}`}
                 </div>
                 <StepIndicator
                   currentStep={gen.currentStep}
@@ -753,7 +631,6 @@ export default function Home() {
               </div>
             )}
 
-            {/* Error */}
             {gen.error && (
               <div
                 style={{
@@ -771,7 +648,6 @@ export default function Home() {
               </div>
             )}
 
-            {/* Results */}
             {gen.trajectories.length > 0 && (
               <div
                 style={{
@@ -780,7 +656,7 @@ export default function Home() {
                 }}
               >
                 <div style={sectionLabelStyle}>
-                  {t("denoised_title")} — {gen.keptNoiseFragments.length}{" "}
+                  {t("denoised_title")} — {caughtCount}{" "}
                   {t("merged_signals_label")} — {t("guidance_label")} {guidance} —{" "}
                   {t("steps_label")} {denoiseSteps}
                 </div>
@@ -795,7 +671,6 @@ export default function Home() {
               </div>
             )}
 
-            {/* Edit state / personality nav */}
             {!gen.isGenerating && gen.trajectories.length === 0 && (
               <div style={{ display: "flex", gap: 12, marginTop: 16 }}>
                 <button

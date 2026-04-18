@@ -31,9 +31,15 @@ Details below are intentionally not duplicated in the README — they're Claude-
 
 ### Key Files
 
-- [app/page.tsx](app/page.tsx) — UI state machine (`idle → scanning → reviewing → ready → denoising`), daily quota tracking via localStorage.
-- [hooks/useGeneration.ts](hooks/useGeneration.ts) — Generation pipeline: prompt construction, fragment parsing, parallel trajectory generation.
+- [app/page.tsx](app/page.tsx) — UI state machine (`idle → scanning → reviewing → ready → denoising`), daily quota tracking via localStorage. Integrates BulletField + AmmoHUD + FireImpact.
+- [hooks/useGeneration.ts](hooks/useGeneration.ts) — Generation pipeline: prompt construction, fragment-to-bullet conversion, catch/ricochet lifecycle, bullet seed building.
+- [lib/revolver.ts](lib/revolver.ts) — Pure helpers for bullet model: `fragmentToBullet`, `catchBullet`, `ricochetBullet`, `chamberSnapshot`, `buildBulletSeed`.
 - [lib/prompts.ts](lib/prompts.ts) — Prompt templates for each pipeline phase.
-- [lib/providers.ts](lib/providers.ts) — Multi-provider LLM client (Anthropic, OpenRouter, xAI, Gemini); normalizes responses to Anthropic format.
+- [lib/motion.ts](lib/motion.ts) — Central tuning knobs for Curate-phase animations (Framer Motion springs, durations, kinetic-type sizes).
+- [lib/providers.ts](lib/providers.ts) — Multi-provider LLM client (Anthropic, OpenRouter, xAI); normalizes responses to Anthropic format.
 - [lib/rateLimit.ts](lib/rateLimit.ts) — Upstash Redis-backed per-IP and global daily rate limiting.
 - [i18n/index.tsx](i18n/index.tsx) — i18n Context Provider; prompts respond in the selected language.
+- [components/BulletField.tsx](components/BulletField.tsx) — Kinetic typography stage: bullets fly across screen, user clicks to catch.
+- [components/AmmoHUD.tsx](components/AmmoHUD.tsx) — Danganronpa-style cartridge HUD showing 6 chambers.
+- [components/CartridgeIcon.tsx](components/CartridgeIcon.tsx) — SVG cartridge icon (loaded/empty).
+- [components/FireImpact.tsx](components/FireImpact.tsx) — Cinematic "FIRE" beat overlay with flash, starburst, shake.

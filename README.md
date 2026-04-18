@@ -25,7 +25,7 @@ All provider responses are normalized to Anthropic's format before returning to 
 app/                Next.js App Router (pages + API routes)
   page.tsx          Main UI — state machine and generation pipeline
   api/generate/     POST endpoint — provider routing + rate limiting
-components/         Modular React components (Big5Form, NoiseSeedPanel, etc.)
+components/         Modular React components (Big5Form, BulletField, AmmoHUD, etc.)
 hooks/              useGeneration.ts — generation pipeline logic
 i18n/               Context-based i18n (English, Chinese, Japanese, Korean)
 lib/                constants, prompts, providers, rateLimit
@@ -62,12 +62,14 @@ npm run dev       # local dev server
 npm run build     # production build
 npm run start     # run production build locally
 npm run lint      # ESLint
+npm test          # vitest run
+npm run test:watch # vitest watch
 ```
 
 ## Generation Pipeline
 
 1. **Scan** — LLM generates 10 raw noise fragments (4–12 words each).
-2. **Curate** — User keeps up to 5 fragments; one random unselected fragment is auto-injected as a "wildcard".
+2. **Curate** — Fragments become "bullets" that fly across a kinetic typography field. User clicks to catch up to 6 bullets into a Danganronpa-style revolver chamber. Missed bullets ricochet and fade; after 3 passes they're spent. When 6 chambers are loaded, the player fires.
 3. **Denoise** — Multi-step refinement loop (2–8 steps). Each step feeds the previous output as context; Big Five scores and guidance scale (1–10) are included in every prompt.
    - Steps 1–40%: add structure and causality
    - Steps 40–70%: sharpen specificity and turning points
@@ -80,9 +82,8 @@ npm run lint      # ESLint
 - **Big Five personality** — shapes HOW trajectories unfold, not just what happens
 - **Adjustable denoising steps** (2–8) — more steps = finer refinement
 - **Guidance scale** (1–10) — 1 = quiet life, 10 = biography-worthy
-- **Multiple samples** — parallel trajectories from the same starting point
-- **i18n** — English, Chinese, Japanese, Korean
-- **Multi-provider** — Anthropic, OpenRouter, xAI, Google Gemini
+- **Danganronpa-style Curate** — kinetic typography bullet field, cartridge HUD, cinematic FIRE beat
+- **i18n** — English, Chinese
 
 ## Rate Limiting
 
@@ -93,7 +94,8 @@ Optional, enabled when `UPSTASH_REDIS_REST_URL` is set:
 
 ## Tech Stack
 
-- **Framework**: Next.js (App Router) + React
-- **LLM providers**: Anthropic, OpenRouter, xAI, Google Gemini
+- **Framework**: Next.js (App Router) + React + Framer Motion
+- **LLM providers**: Anthropic, OpenRouter, xAI
 - **Rate limiting**: Upstash Redis
 - **i18n**: Lightweight React Context (no dependencies)
+- **Testing**: Vitest + React Testing Library

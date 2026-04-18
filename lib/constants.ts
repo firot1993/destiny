@@ -21,7 +21,5 @@ export const BIG5_KEYS = [
 ] as const;
 
 export const NOISE_SCAN_COUNT = 10;
-export const MAX_KEPT_NOISE = 5;
-export const MAX_REMOVED_NOISE = NOISE_SCAN_COUNT - MAX_KEPT_NOISE;
 export const DAILY_USAGE_STORAGE_PREFIX = "destiny-daily-usage";
 export const API_ROUTE = "/api/generate";

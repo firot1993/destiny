@@ -38,6 +38,7 @@
     "node_modules",
     "frontend",
     "worker",
-    "local-proxy"
+    "local-proxy",
+    "vitest.config.ts"
   ]
 }
