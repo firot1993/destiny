@@ -528,7 +528,7 @@ export default function Home() {
             )}
 
             {(gen.runPhase === "reviewing" || gen.runPhase === "ready") && (
-              <div style={{ position: "relative", marginBottom: 24 }}>
+              <div className="bullet-stage" style={{ marginBottom: 24 }}>
                 <AmmoHUD
                   bullets={gen.bullets}
                   loadedLabel={t("ammo_loaded_label")}
