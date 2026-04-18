@@ -22,7 +22,10 @@ import { FireImpact } from "@/components/FireImpact";
 import { buildFieldsFromAnswers } from "@/lib/questionnaire";
 import { PROVIDERS, DEFAULT_PROVIDER } from "@/lib/constants";
 import { theme, mono, labelStyles } from "@/lib/theme";
+import { previewBullets } from "@/lib/devPreview";
 import type { QuestionnaireAnswers } from "@/types";
+
+const IS_DEV = process.env.NODE_ENV === "development";
 
 type PageTab = "input" | "big5" | "generate";
 
@@ -608,6 +611,21 @@ export default function Home() {
                   <Play size={13} strokeWidth={2} aria-hidden="true" />
                   {t("btn_scan_noise")}
                 </span>
+              </button>
+            )}
+
+            {IS_DEV && gen.bullets.length === 0 && !gen.isGenerating && (
+              <button
+                onClick={() => gen.previewAnimation(previewBullets())}
+                style={{
+                  ...buttonStyles.secondary,
+                  marginTop: 8,
+                  fontSize: 10,
+                  opacity: 0.6,
+                  letterSpacing: 1,
+                }}
+              >
+                ⚡ preview animation
               </button>
             )}
 

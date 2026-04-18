@@ -127,6 +127,7 @@ export interface UseGenerationReturn {
   ricochetUncaught: () => void;
   reloadScan: () => Promise<void>;
   stopGeneration: () => void;
+  previewAnimation: (fakeBullets: Bullet[]) => void;
 }
 
 export function useGeneration({
@@ -330,6 +331,11 @@ export function useGeneration({
     await scanNoiseFragments();
   };
 
+  const previewAnimation = (fakeBullets: Bullet[]) => {
+    setBullets(fakeBullets);
+    setRunPhase("reviewing");
+  };
+
   const generate = async () => {
     if (generationLockRef.current || bullets.filter((b) => b.status === "caught").length === 0) return;
     generationLockRef.current = true;
@@ -404,5 +410,6 @@ export function useGeneration({
     ricochetUncaught,
     reloadScan,
     stopGeneration: () => { abortRef.current = true; },
+    previewAnimation,
   };
 }

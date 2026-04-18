@@ -1,8 +1,10 @@
 export const motion = {
-  bulletDurationSec: 4.2,
-  ricochetDurationSec: 5.6,
-  bulletStaggerSec: 0.52,
-  bulletVerticalBobPx: 10,
+  bulletDurationSec: 3.8,
+  ricochetDurationSec: 5.2,
+  // Sequential spawn: next bullet enters this many seconds after the previous
+  bulletSpawnIntervalSec: 1.4,
+  bulletBobDurationSec: 2.2,   // independent bob cycle (CSS keyframe)
+  bulletBobPx: 10,
   bulletTiltMaxDeg: 4,
   bulletHitPaddingX: 24,
   bulletHitPaddingY: 12,
@@ -23,6 +25,8 @@ export const motion = {
   fireTotalMs: 840,
 
   reloadSpinDurationMs: 420,
+  // Easing for bullet x-travel — slight ease-in-out reads as thrown, not conveyor
+  bulletEase: [0.22, 0, 0.78, 1] as const,
 } as const;
 
 export const kineticType = {
