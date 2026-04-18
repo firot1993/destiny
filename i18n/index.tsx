@@ -56,35 +56,12 @@ const translations: Record<string, Record<string, string>> = {
     guidance_label: "Ambition",
     steps_label: "Detail",
     workflow_scan: "Generate",
-    workflow_curate: "Pick",
+    workflow_curate: "Catch",
     workflow_denoise: "Build",
     latent_scan_label: "Story Ideas",
-    latent_scan_rule:
-      "Review 10 ideas one by one. You can keep up to 5. Skipping 5 will lock the rest.",
     noise_title: "Story Ideas",
     scan_empty:
-      "Click Generate to get 10 story ideas. Review them one by one, keep up to 5, and we'll turn them into your life path.",
-    noise_card_label: "Idea",
-    noise_review_hint:
-      "Keep it or skip it. You can keep up to 5 ideas. Review ends after 5 keeps, 5 skips, or all ideas are seen.",
-    noise_kept: "kept",
-    noise_keep_slots_left: "slots left",
-    noise_deleted: "skipped",
-    noise_remove_action: "Skip",
-    noise_keep_action: "Keep",
-    kept_signals_title: "Kept Ideas",
-    merged_seed_title: "Final Mix",
-    merged_seed_hint:
-      "One of your kept ideas was swapped with a surprise pick for an unexpected twist.",
-    noise_selected_label: "Selected",
-    noise_wildcard_label: "Surprise",
-    noise_wildcard_hint: "A random idea swapped in for an unexpected twist.",
-    noise_dropped_label: "Removed",
-    noise_choice_locked: "Ideas locked in. Ready to build your life path.",
-    noise_system_override:
-      "A surprise idea was added to your mix.",
-    noise_ready_hint:
-      "Your ideas are ready, with one surprise pick added. Click below to generate your life paths.",
+      "Click Generate to scan 10 story fragments. Catch bullets as they fly by — load six, then fire.",
     guidance_1: "quiet life",
     guidance_2: "steady path",
     guidance_3: "solid",
@@ -102,9 +79,6 @@ const translations: Record<string, Record<string, string>> = {
     trajectories: "paths",
     trajectory: "path",
     btn_scan_noise: "Generate 10 Ideas",
-    btn_denoise_merged: "Build My Life Path",
-    btn_preparing_merge: "Preparing",
-    btn_rescan: "New Ideas",
     btn_stop: "Stop",
     progress_scanning: "Generating Ideas",
     progress_denoising: "Building",
@@ -124,10 +98,6 @@ const translations: Record<string, Record<string, string>> = {
     q_skip: "skip",
     q_back: "back",
 
-    // Wildcard toggle
-    wildcard_label: "Surprise Idea",
-    wildcard_hint: "Randomly swap one kept idea with an unselected one",
-
     // Provider
     provider_label: "Provider",
     provider_anthropic: "Anthropic",
@@ -136,6 +106,16 @@ const translations: Record<string, Record<string, string>> = {
 
     // Settings
     settings: "Settings",
+
+    // Revolver curate
+    bullet_reload: "RELOAD",
+    bullet_fire: "FIRE",
+    ammo_loaded_label: "LOADED",
+    curate_stage_hint: "Catch the bullets. Load six. Fire.",
+    bullet_round_empty_title: "ROUND EMPTY",
+    bullet_round_empty_body: "Everything slipped past. Reload for a fresh scan.",
+    bullet_round_ready_title: "CHAMBER LIVE",
+    bullet_round_ready_body: "You can fire what you caught, or reload for another pass.",
   },
 
   zh: {
@@ -178,33 +158,12 @@ const translations: Record<string, Record<string, string>> = {
     guidance_label: "野心程度",
     steps_label: "细节程度",
     workflow_scan: "生成",
-    workflow_curate: "筛选",
+    workflow_curate: "捕捉",
     workflow_denoise: "构建",
     latent_scan_label: "故事灵感",
-    latent_scan_rule:
-      "逐条查看 10 条灵感，最多保留 5 条。跳过 5 条后，剩余灵感自动锁定。",
     noise_title: "故事灵感",
     scan_empty:
-      "点击生成，获取 10 条故事灵感。逐条决定保留或跳过，最多保留 5 条，我们会把它们变成你的人生路径。",
-    noise_card_label: "灵感",
-    noise_review_hint:
-      "保留或跳过。最多保留 5 条。保留满 5 条、跳过满 5 条，或全部看完后结束。",
-    noise_kept: "保留",
-    noise_keep_slots_left: "剩余可保留",
-    noise_deleted: "已跳过",
-    noise_remove_action: "跳过",
-    noise_keep_action: "保留",
-    kept_signals_title: "已保留灵感",
-    merged_seed_title: "最终组合",
-    merged_seed_hint: "其中一条灵感会被随机替换为一条意外灵感，增加一点变数。",
-    noise_selected_label: "已选",
-    noise_wildcard_label: "惊喜",
-    noise_wildcard_hint: "随机加入的一条意外灵感。",
-    noise_dropped_label: "已移除",
-    noise_choice_locked: "灵感已锁定，准备生成你的人生路径。",
-    noise_system_override: "已为你加入一条意外灵感。",
-    noise_ready_hint:
-      "灵感已就绪，其中加入了一条意外惊喜。点击下方开始生成。",
+      "点击生成，扫描 10 条故事碎片。子弹飞过时抓住它们——装满六发，然后开火。",
     guidance_1: "平淡一生",
     guidance_2: "稳健之路",
     guidance_3: "踏实",
@@ -222,9 +181,6 @@ const translations: Record<string, Record<string, string>> = {
     trajectories: "条路径",
     trajectory: "条路径",
     btn_scan_noise: "生成 10 条灵感",
-    btn_denoise_merged: "生成我的人生路径",
-    btn_preparing_merge: "正在准备",
-    btn_rescan: "重新生成",
     btn_stop: "停止",
     progress_scanning: "正在生成灵感",
     progress_denoising: "正在构建",
@@ -244,15 +200,21 @@ const translations: Record<string, Record<string, string>> = {
     q_skip: "跳过",
     q_back: "返回",
 
-    wildcard_label: "意外灵感",
-    wildcard_hint: "随机用一条未选灵感替换已保留的一条",
-
     provider_label: "提供商",
     provider_anthropic: "Anthropic",
     provider_openrouter: "OpenRouter",
     model_label: "模型",
 
     settings: "设置",
+
+    bullet_reload: "重新装填",
+    bullet_fire: "开火",
+    ammo_loaded_label: "已装填",
+    curate_stage_hint: "抓住子弹。装满六发。开火。",
+    bullet_round_empty_title: "本轮落空",
+    bullet_round_empty_body: "这一轮都溜走了。重新装填，再扫一轮。",
+    bullet_round_ready_title: "弹仓仍可开火",
+    bullet_round_ready_body: "你可以用已捕获的内容直接开火，或重新装填再来一轮。",
   },
 };
 

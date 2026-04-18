@@ -4,27 +4,27 @@ import { useEffect, useRef, useState } from "react";
 import type {
   Fields,
   NoiseFragment,
-  MergedNoisePlan,
+  Bullet,
   RunPhase,
   WorkflowStage,
-  MergeRevealStage,
 } from "@/types";
+import { REVOLVER_CHAMBERS } from "@/types";
+import {
+  fragmentToBullet,
+  catchBullet as catchBulletHelper,
+  ricochetBullet,
+  buildBulletSeed,
+} from "@/lib/revolver";
 import {
   buildStateString,
   generateStepPrompt,
   extractNormalizedText,
   parseNoiseFragments,
-  buildMergedNoisePlan,
-  buildMergedNoiseSeed,
 } from "@/lib/prompts";
 import {
-  MAX_KEPT_NOISE,
-  MAX_REMOVED_NOISE,
   DAILY_USAGE_STORAGE_PREFIX,
   API_ROUTE,
 } from "@/lib/constants";
-
-// ─── Daily quota helpers ──────────────────────────────────
 
 function getUtcDateKey(): string {
   return new Date().toISOString().slice(0, 10);
@@ -68,7 +68,6 @@ function writeDailyUsageSnapshot(usage: DailyUsage): void {
   try {
     window.localStorage.setItem(key, JSON.stringify(usage));
   } catch {
-    // ignore storage failures
   }
 }
 
@@ -99,8 +98,6 @@ function resolveDailyUsage(opts: {
   };
 }
 
-// ─── Hook params / return ────────────────────────────────
-
 export interface UseGenerationParams {
   fields: Fields;
   big5: number[];
@@ -110,40 +107,28 @@ export interface UseGenerationParams {
   model: string;
   lang: string;
   t: (key: string) => string;
-  enableWildcard: boolean;
 }
 
 export interface UseGenerationReturn {
-  // State
   isGenerating: boolean;
   runPhase: RunPhase;
   currentStep: number;
-  noiseFragments: NoiseFragment[];
-  currentNoiseIndex: number;
-  keptNoiseFragments: NoiseFragment[];
-  mergedNoisePlan: MergedNoisePlan | null;
-  mergeRevealStage: MergeRevealStage;
+  bullets: Bullet[];
   trajectories: string[];
   allStepOutputs: string[][];
   error: string | null;
   dailyRemaining: number | null;
   dailyLimit: number | null;
-  // Derived
-  currentNoiseFragment: NoiseFragment | null;
-  removedNoiseCount: number;
-  keepSlotsLeft: number;
   workflowStage: WorkflowStage;
-  canRemoveCurrentNoise: boolean;
-  canKeepCurrentNoise: boolean;
-  isMergeRevealPending: boolean;
-  // Actions
   scanNoiseFragments: () => Promise<void>;
-  denoiseSelectedNoise: () => Promise<void>;
-  decideCurrentNoise: (decision: "keep" | "remove") => void;
+  generate: () => Promise<void>;
+  catchBullet: (bulletId: number) => void;
+  ricochetSingle: (bulletId: number) => void;
+  ricochetUncaught: () => void;
+  reloadScan: () => Promise<void>;
   stopGeneration: () => void;
+  previewAnimation: (fakeBullets: Bullet[]) => void;
 }
-
-// ─── Hook implementation ─────────────────────────────────
 
 export function useGeneration({
   fields,
@@ -154,16 +139,11 @@ export function useGeneration({
   model,
   lang,
   t,
-  enableWildcard,
 }: UseGenerationParams): UseGenerationReturn {
   const [isGenerating, setIsGenerating] = useState(false);
   const [runPhase, setRunPhase] = useState<RunPhase>("idle");
   const [currentStep, setCurrentStep] = useState(0);
-  const [noiseFragments, setNoiseFragments] = useState<NoiseFragment[]>([]);
-  const [currentNoiseIndex, setCurrentNoiseIndex] = useState(0);
-  const [keptNoiseFragments, setKeptNoiseFragments] = useState<NoiseFragment[]>([]);
-  const [mergedNoisePlan, setMergedNoisePlan] = useState<MergedNoisePlan | null>(null);
-  const [mergeRevealStage, setMergeRevealStage] = useState<MergeRevealStage>("idle");
+  const [bullets, setBullets] = useState<Bullet[]>([]);
   const [trajectories, setTrajectories] = useState<string[]>([]);
   const [allStepOutputs, setAllStepOutputs] = useState<string[][]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -172,8 +152,11 @@ export function useGeneration({
   const [dailyUsageDate, setDailyUsageDate] = useState(() => getUtcDateKey());
   const abortRef = useRef(false);
   const generationLockRef = useRef(false);
+  const caughtCount = bullets.filter((b) => b.status === "caught").length;
+  const activeBulletsCount = bullets.filter(
+    (b) => b.status === "flying" || b.status === "ricocheting"
+  ).length;
 
-  // Load stored daily quota on mount
   useEffect(() => {
     const today = getUtcDateKey();
     setDailyUsageDate(today);
@@ -187,38 +170,23 @@ export function useGeneration({
     }
   }, []);
 
-  // Merge reveal animation timing
   useEffect(() => {
-    if (!mergedNoisePlan) {
-      setMergeRevealStage("idle");
-      return;
-    }
-    if (runPhase !== "ready") {
-      if (
-        runPhase === "idle" ||
-        runPhase === "reviewing" ||
-        runPhase === "scanning"
-      ) {
-        setMergeRevealStage("idle");
+    if (runPhase !== "reviewing" && runPhase !== "ready") return;
+
+    if (
+      caughtCount >= REVOLVER_CHAMBERS ||
+      (caughtCount > 0 && activeBulletsCount === 0)
+    ) {
+      if (runPhase !== "ready") {
+        setRunPhase("ready");
       }
       return;
     }
-    setMergeRevealStage("holding");
-    const glitchTimer = window.setTimeout(
-      () => setMergeRevealStage("glitch"),
-      2400
-    );
-    const revealTimer = window.setTimeout(
-      () => setMergeRevealStage("revealed"),
-      3200
-    );
-    return () => {
-      window.clearTimeout(glitchTimer);
-      window.clearTimeout(revealTimer);
-    };
-  }, [runPhase, mergedNoisePlan]);
 
-  // ─── callModel ───────────────────────────────────────────
+    if (runPhase === "ready") {
+      setRunPhase("reviewing");
+    }
+  }, [activeBulletsCount, caughtCount, runPhase]);
 
   const callModel = async (
     messages: ReturnType<typeof generateStepPrompt>[],
@@ -269,7 +237,6 @@ export function useGeneration({
             ? parsed.error
             : JSON.stringify(parsed.error ?? parsed);
       } catch {
-        // leave non-JSON as-is
       }
       throw new Error(`API ${res.status}: ${message.slice(0, 200)}`);
     }
@@ -292,63 +259,9 @@ export function useGeneration({
     return text;
   };
 
-  // ─── Helpers ─────────────────────────────────────────────
-
   const clearDenoisedOutputs = () => {
     setTrajectories([]);
     setAllStepOutputs([]);
-  };
-
-  const lockNoiseSelection = (
-    selectedFragments: NoiseFragment[],
-    nextNoiseIndex: number
-  ) => {
-    setKeptNoiseFragments(selectedFragments);
-    setMergedNoisePlan(
-      buildMergedNoisePlan(selectedFragments, noiseFragments, enableWildcard)
-    );
-    setCurrentNoiseIndex(nextNoiseIndex);
-    setRunPhase("ready");
-  };
-
-  // ─── Actions ─────────────────────────────────────────────
-
-  const decideCurrentNoise = (decision: "keep" | "remove") => {
-    if (isGenerating) return;
-    const currentNoiseFragment =
-      runPhase === "reviewing" ? noiseFragments[currentNoiseIndex] ?? null : null;
-    if (!currentNoiseFragment) return;
-
-    setError(null);
-    clearDenoisedOutputs();
-
-    const nextKeptNoise =
-      decision === "keep"
-        ? [...keptNoiseFragments, currentNoiseFragment]
-        : keptNoiseFragments;
-    const nextNoiseIndex = currentNoiseIndex + 1;
-    const removedAfterDecision = nextNoiseIndex - nextKeptNoise.length;
-
-    if (nextKeptNoise.length >= MAX_KEPT_NOISE) {
-      lockNoiseSelection(nextKeptNoise, nextNoiseIndex);
-      return;
-    }
-    if (removedAfterDecision >= MAX_REMOVED_NOISE) {
-      const remainingNoise = noiseFragments.slice(nextNoiseIndex);
-      lockNoiseSelection(
-        [...nextKeptNoise, ...remainingNoise],
-        noiseFragments.length
-      );
-      return;
-    }
-    setKeptNoiseFragments(nextKeptNoise);
-    setMergedNoisePlan(null);
-    setCurrentNoiseIndex(nextNoiseIndex);
-    if (nextNoiseIndex >= noiseFragments.length) {
-      lockNoiseSelection(nextKeptNoise, nextNoiseIndex);
-      return;
-    }
-    setRunPhase("reviewing");
   };
 
   const scanNoiseFragments = async () => {
@@ -358,11 +271,7 @@ export function useGeneration({
     const stateStr = buildStateString(fields, big5);
     setIsGenerating(true);
     setRunPhase("scanning");
-    setNoiseFragments([]);
-    setKeptNoiseFragments([]);
-    setMergedNoisePlan(null);
-    setMergeRevealStage("idle");
-    setCurrentNoiseIndex(0);
+    setBullets([]);
     clearDenoisedOutputs();
     setError(null);
     abortRef.current = false;
@@ -382,7 +291,8 @@ export function useGeneration({
         throw new Error("Noise scan returned no usable fragments.");
       }
 
-      setNoiseFragments(parsedNoise.map((text, i) => ({ id: i + 1, text })));
+      const scanned: NoiseFragment[] = parsedNoise.map((text, i) => ({ id: i + 1, text }));
+      setBullets(scanned.map(fragmentToBullet));
       setRunPhase("reviewing");
     } catch (e) {
       setError((e as Error).message);
@@ -394,14 +304,44 @@ export function useGeneration({
     }
   };
 
-  const denoiseSelectedNoise = async () => {
-    if (generationLockRef.current || keptNoiseFragments.length === 0) return;
+  const catchBulletAction = (bulletId: number) => {
+    if (isGenerating) return;
+    setBullets((prev) => {
+      const next = catchBulletHelper(prev, bulletId);
+      const caught = next.filter((b) => b.status === "caught").length;
+      if (caught >= REVOLVER_CHAMBERS) {
+        setRunPhase("ready");
+      }
+      return next;
+    });
+  };
+
+  const ricochetSingle = (bulletId: number) => {
+    setBullets((prev) =>
+      prev.map((b) => (b.id === bulletId ? ricochetBullet(b) : b))
+    );
+  };
+
+  const ricochetUncaught = () => {
+    setBullets((prev) => prev.map(ricochetBullet));
+  };
+
+  const reloadScan = async () => {
+    setBullets([]);
+    await scanNoiseFragments();
+  };
+
+  const previewAnimation = (fakeBullets: Bullet[]) => {
+    setBullets(fakeBullets);
+    setRunPhase("reviewing");
+  };
+
+  const generate = async () => {
+    if (generationLockRef.current || bullets.filter((b) => b.status === "caught").length === 0) return;
     generationLockRef.current = true;
 
     const stateStr = buildStateString(fields, big5);
-    const activeMergedNoisePlan =
-      mergedNoisePlan ?? buildMergedNoisePlan(keptNoiseFragments, noiseFragments, enableWildcard);
-    const mergedNoiseSeed = buildMergedNoiseSeed(activeMergedNoisePlan.fragments);
+    const mergedNoiseSeed = buildBulletSeed(bullets);
 
     setIsGenerating(true);
     setRunPhase("denoising");
@@ -443,12 +383,6 @@ export function useGeneration({
     }
   };
 
-  // ─── Derived state ───────────────────────────────────────
-
-  const currentNoiseFragment =
-    runPhase === "reviewing" ? noiseFragments[currentNoiseIndex] ?? null : null;
-  const removedNoiseCount = Math.max(0, currentNoiseIndex - keptNoiseFragments.length);
-  const keepSlotsLeft = Math.max(0, MAX_KEPT_NOISE - keptNoiseFragments.length);
   const workflowStage: WorkflowStage =
     runPhase === "scanning"
       ? "scan"
@@ -457,37 +391,25 @@ export function useGeneration({
       : runPhase === "denoising" || trajectories.length > 0
       ? "denoise"
       : "scan";
-  const canRemoveCurrentNoise = Boolean(currentNoiseFragment);
-  const canKeepCurrentNoise = Boolean(currentNoiseFragment) && keepSlotsLeft > 0;
-  const isMergeRevealPending =
-    runPhase === "ready" &&
-    mergedNoisePlan !== null &&
-    mergeRevealStage !== "revealed";
 
   return {
     isGenerating,
     runPhase,
     currentStep,
-    noiseFragments,
-    currentNoiseIndex,
-    keptNoiseFragments,
-    mergedNoisePlan,
-    mergeRevealStage,
+    bullets,
     trajectories,
     allStepOutputs,
     error,
     dailyRemaining,
     dailyLimit,
-    currentNoiseFragment,
-    removedNoiseCount,
-    keepSlotsLeft,
     workflowStage,
-    canRemoveCurrentNoise,
-    canKeepCurrentNoise,
-    isMergeRevealPending,
     scanNoiseFragments,
-    denoiseSelectedNoise,
-    decideCurrentNoise,
+    generate,
+    catchBullet: catchBulletAction,
+    ricochetSingle,
+    ricochetUncaught,
+    reloadScan,
     stopGeneration: () => { abortRef.current = true; },
+    previewAnimation,
   };
 }

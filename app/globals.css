@@ -492,6 +492,125 @@ input[type=range]:active::-webkit-slider-thumb {
   }
 }
 
+/* ---- Bullet field — Curate phase ----
+   Kinetic-typography stage. CSS owns bullet flight, bob, bullet-time,
+   and lock-on styling so that `:has()`-gated hover can pause everything
+   at once (no restart on resume). BulletField.tsx owns the data layer
+   and catch-burst overlay. */
+.bullet-field {
+  cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'><g fill='none' stroke='rgba(0,0,0,0.72)' stroke-width='1.4' stroke-linecap='round'><line x1='12' y1='2' x2='12' y2='9'/><line x1='12' y1='15' x2='12' y2='22'/><line x1='2' y1='12' x2='9' y2='12'/><line x1='15' y1='12' x2='22' y2='12'/><circle cx='12' cy='12' r='1.2' fill='rgba(0,0,0,0.72)' stroke='none'/></g></svg>") 12 12, crosshair;
+}
+
+@keyframes bulletFlyLtr {
+  0%   { translate: -120vw 0; opacity: 0; }
+  8%   { opacity: var(--bullet-opacity, 1); }
+  88%  { opacity: var(--bullet-opacity, 1); }
+  100% { translate: 120vw 0; opacity: 0; }
+}
+@keyframes bulletFlyRtl {
+  0%   { translate: 120vw 0; opacity: 0; }
+  8%   { opacity: var(--bullet-opacity, 1); }
+  88%  { opacity: var(--bullet-opacity, 1); }
+  100% { translate: -120vw 0; opacity: 0; }
+}
+@keyframes bulletBob {
+  0%, 100% { margin-top: 0; }
+  50%      { margin-top: calc(var(--bullet-bob-px, 10px) * -1); }
+}
+
+.bullet-wrap {
+  position: absolute;
+  left: 0;
+  transform-origin: center;
+  transition:
+    scale 140ms cubic-bezier(0.22, 1, 0.3, 1),
+    filter 140ms ease,
+    z-index 0s linear 140ms;
+}
+
+/* When any wrapper is hovered, the field enters bullet-time.
+   Flight + bob speed scaling is handled in JS via the Web Animations API
+   (Animation.playbackRate) so progress is preserved — CSS
+   animation-play-state can only toggle paused/running, not slow-mo. */
+
+.bullet-field:has(.bullet-wrap:hover) .bullet-wrap:not(:hover) {
+  filter: blur(var(--bullet-dim-blur, 1.2px))
+          brightness(var(--bullet-dim-brightness, 0.48));
+}
+
+.bullet-field:has(.bullet-wrap:hover) .bullet-wrap:hover {
+  scale: var(--bullet-focus-scale, 1.18);
+  filter: brightness(var(--bullet-focus-brightness, 1.12));
+  z-index: 3;
+}
+
+/* Lock-on ring — appears around the hovered bullet.
+   Outside the parallelogram-clipped text element so clipPath doesn't cut it. */
+.lock-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  pointer-events: none;
+  opacity: 0;
+  scale: 0.55;
+  translate: -50% -50%;
+  transition:
+    opacity 120ms ease,
+    scale 220ms cubic-bezier(0.22, 1, 0.3, 1);
+}
+.bullet-wrap:hover .lock-ring {
+  opacity: 1;
+  scale: 1;
+}
+
+/* Catch burst — transient flash + shards. No cursor interactivity. */
+.catch-burst {
+  position: absolute;
+  pointer-events: none;
+  translate: -50% -50%;
+  z-index: 4;
+}
+
+/* "Stop the world" — when any bullet is hovered, dim everything except
+   the bullet stage. A fixed overlay inside page-shell's stacking context
+   so we can lift the stage above it without touching body stacking. */
+.bullet-stage {
+  position: relative;
+}
+.page-shell::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 10, 14, 0.34);
+  pointer-events: none;
+  z-index: 20;
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+.page-shell:has(.bullet-wrap:hover)::after {
+  opacity: 1;
+}
+.page-shell:has(.bullet-wrap:hover) .bullet-stage {
+  z-index: 21;
+}
+
+/* Opt bullets out of the global button hover/active nudge —
+   the bullet-time scale + catch burst own the press payoff. */
+button.bullet,
+button.bullet:hover:not(:disabled),
+button.bullet:active:not(:disabled) {
+  transform: none;
+  transition:
+    border-color 0.18s ease,
+    background-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+button.bullet:focus-visible {
+  outline: 2px solid var(--amber-focus);
+  outline-offset: 4px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

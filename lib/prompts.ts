@@ -1,4 +1,4 @@
-import type { Fields, Message, NoiseFragment, MergedNoisePlan } from "@/types";
+import type { Fields, Message } from "@/types";
 import { BIG5_KEYS, NOISE_SCAN_COUNT } from "@/lib/constants";
 
 const LANG_NAMES: Record<string, string> = {
@@ -237,48 +237,4 @@ export function parseNoiseFragments(rawText: string): string[] {
     })
     .filter(Boolean)
     .slice(0, NOISE_SCAN_COUNT);
-}
-
-export function shuffleFragments<T>(fragments: T[]): T[] {
-  const shuffled = [...fragments];
-  for (let index = shuffled.length - 1; index > 0; index -= 1) {
-    const swapIndex = Math.floor(Math.random() * (index + 1));
-    [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
-  }
-  return shuffled;
-}
-
-export function buildMergedNoisePlan(
-  selectedFragments: NoiseFragment[],
-  allFragments: NoiseFragment[] = selectedFragments,
-  enableWildcard = true
-): MergedNoisePlan {
-  if (selectedFragments.length === 0) {
-    return { fragments: [], droppedFragment: null, wildcardFragment: null };
-  }
-  const selectedIds = new Set(selectedFragments.map((f) => f.id));
-  const unselectedFragments = allFragments.filter((f) => !selectedIds.has(f.id));
-  const shuffledSelected = shuffleFragments(selectedFragments);
-  const shouldSwapWildcard = enableWildcard && unselectedFragments.length > 0 && shuffledSelected.length > 0;
-  const droppedFragment = shouldSwapWildcard
-    ? shuffledSelected[shuffledSelected.length - 1]
-    : null;
-  const remixedSelection = shouldSwapWildcard
-    ? shuffledSelected.slice(0, -1)
-    : shuffledSelected;
-  const wildcardFragment = shouldSwapWildcard
-    ? unselectedFragments[Math.floor(Math.random() * unselectedFragments.length)]
-    : null;
-  const mergedFragments = wildcardFragment
-    ? shuffleFragments([
-        ...remixedSelection.map((f) => ({ ...f, mergeSource: "selected" as const })),
-        { ...wildcardFragment, mergeSource: "wildcard" as const },
-      ])
-    : remixedSelection.map((f) => ({ ...f, mergeSource: "selected" as const }));
-
-  return { fragments: mergedFragments, droppedFragment, wildcardFragment };
-}
-
-export function buildMergedNoiseSeed(fragments: NoiseFragment[]): string {
-  return fragments.map((f, i) => `${i + 1}::${f.text}`).join("\n");
 }

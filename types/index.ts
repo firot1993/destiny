@@ -23,14 +23,24 @@ export interface DailyQuota {
 export interface NoiseFragment {
   id: number;
   text: string;
-  mergeSource?: "selected" | "wildcard";
 }
 
-export interface MergedNoisePlan {
-  fragments: NoiseFragment[];
-  droppedFragment: NoiseFragment | null;
-  wildcardFragment: NoiseFragment | null;
+export type BulletStatus =
+  | "flying"
+  | "ricocheting"
+  | "caught"
+  | "spent";
+
+export interface Bullet {
+  id: number;
+  text: string;
+  status: BulletStatus;
+  passCount: number;
+  chamberIndex: number | null;
 }
+
+export const REVOLVER_CHAMBERS = 6;
+export const MAX_BULLET_PASSES = 3;
 
 export type AgeGroup = "youth" | "twenties" | "midcareer" | "senior";
 
@@ -52,6 +62,5 @@ export interface Fields {
 
 export type RunPhase = "idle" | "scanning" | "reviewing" | "ready" | "denoising" | "complete";
 export type WorkflowStage = "scan" | "curate" | "denoise";
-export type MergeRevealStage = "idle" | "holding" | "glitch" | "revealed";
 export type Language = "en" | "zh";
 export type QuestionnaireAnswers = Record<string, string[]>;

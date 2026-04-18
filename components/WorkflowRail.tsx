@@ -12,7 +12,7 @@ export function WorkflowRail({ stage }: WorkflowRailProps) {
   const { t } = useI18n();
   const steps = [
     { id: "scan" as const, label: t("workflow_scan") },
-    { id: "curate" as const, label: t("workflow_curate") },
+    { id: "curate" as const, label: t("curate_stage_hint") },
     { id: "denoise" as const, label: t("workflow_denoise") },
   ];
   const activeIndex = steps.findIndex((item) => item.id === stage);
