@@ -132,4 +132,75 @@ describe("useGeneration bullet lifecycle", () => {
 
     expect(result.current.runPhase).toBe("ready");
   });
+
+  it("runs a hidden anti-echo cleanup pass after the final denoise draft", async () => {
+    mockFetch
+      .mockResolvedValueOnce(
+        makeMockResponse({
+          content: [{ type: "text", text: "1:: a held breath" }],
+        })
+      )
+      .mockResolvedValueOnce(
+        makeMockResponse({
+          content: [{ type: "text", text: "Draft trajectory before cleanup" }],
+        })
+      )
+      .mockResolvedValueOnce(
+        makeMockResponse({
+          content: [{ type: "text", text: "Cleaned final trajectory" }],
+        })
+      );
+
+    const { result } = renderHook(() =>
+      useGeneration({
+        fields: {
+          age: "20–29",
+          location: "Can relocate for the right upside",
+          mobility: "Can relocate for the right upside",
+          currentMode: "Early-career builder",
+          trajectoryFocus: "Turning skill into real leverage",
+          skills: "Tech & Engineering",
+          resources: "Some savings",
+          constraints: "Lack of experience",
+          obsessions: "Freedom",
+          workStyle: "Quietly, through craft and depth",
+          riskTolerance: "Go all-in when conviction is high",
+          timeHorizon: "Next 3 years",
+          inflection: "A single piece of work gets noticed by the right person",
+        },
+        big5: [6, 6, 5, 5, 7],
+        guidance: 7,
+        denoiseSteps: 2,
+        provider: "openrouter",
+        model: "test",
+        lang: "en",
+        t: (k: string) => k,
+        curationAnswers: {
+          whyThese: "They feel dangerous but true",
+          rejectedFuture: "too safe",
+        },
+      })
+    );
+
+    await act(async () => {
+      await result.current.scanNoiseFragments();
+    });
+
+    act(() => {
+      result.current.catchBullet(1);
+    });
+
+    await act(async () => {
+      await result.current.generate();
+    });
+
+    expect(mockFetch).toHaveBeenCalledTimes(3);
+    const cleanupRequest = JSON.parse(mockFetch.mock.calls[2][1].body as string) as {
+      messages: Array<{ content: string }>;
+    };
+    expect(cleanupRequest.messages[0].content).toContain(
+      "no longer sounds like a paraphrase of a questionnaire"
+    );
+    expect(result.current.trajectories[0]).toBe("Cleaned final trajectory");
+  });
 });

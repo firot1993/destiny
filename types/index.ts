@@ -60,6 +60,41 @@ export interface Fields {
   inflection: string;
 }
 
+export interface CurationAnswers {
+  whyThese: string;
+  rejectedFuture: string;
+}
+
+export interface StoryConditioning {
+  hardState: {
+    ageBand: string;
+    mobility: string;
+    chapter: string;
+    horizon: string;
+    anchorResource?: string;
+    anchorConstraint?: string;
+    secondaryConstraint?: string;
+  };
+  latentForces: {
+    coreTension: string;
+    momentumPattern: string;
+    exposurePattern: string;
+    riskPattern: string;
+    identityPressure: string;
+    likelyTransformation: string;
+    selectionCharge?: string;
+    rejectedGravity?: string;
+  };
+  personalitySignature: {
+    noveltyAppetite: string;
+    consistencyPressure: string;
+    socialPropulsion: string;
+    conflictTolerance: string;
+    anticipatorySensitivity: string;
+    combinedReading: string;
+  };
+}
+
 export type RunPhase = "idle" | "scanning" | "reviewing" | "ready" | "denoising" | "complete";
 export type WorkflowStage = "scan" | "curate" | "denoise";
 export type Language = "en" | "zh";

@@ -52,7 +52,10 @@ const translations: Record<string, Record<string, string>> = {
     next_generate: "Generate",
 
     // Generate page
-    encoded_state: "Your Profile",
+    encoded_state: "Story Conditions",
+    hidden_pressure_label: "Hidden pressure",
+    momentum_pattern_label: "Momentum pattern",
+    personality_signature_label: "Behavioral signature",
     guidance_label: "Ambition",
     steps_label: "Detail",
     workflow_scan: "Generate",
@@ -116,6 +119,12 @@ const translations: Record<string, Record<string, string>> = {
     bullet_round_empty_body: "Everything slipped past. Reload for a fresh scan.",
     bullet_round_ready_title: "CHAMBER LIVE",
     bullet_round_ready_body: "You can fire what you caught, or reload for another pass.",
+    curation_title: "After The Catch",
+    curation_hint:
+      "Let the bullets control imagery. Use these two answers to tell the story why they matter and what kind of future you're refusing.",
+    curation_why_title: "What made you keep these?",
+    curation_reject_title: "Which kind of future did you reject?",
+    curation_needed: "Choose what made these fragments stick and what kind of future you refused before firing.",
   },
 
   zh: {
@@ -154,7 +163,10 @@ const translations: Record<string, Record<string, string>> = {
     back_state: "返回",
     next_generate: "生成",
 
-    encoded_state: "你的资料",
+    encoded_state: "故事条件",
+    hidden_pressure_label: "隐藏张力",
+    momentum_pattern_label: "势能路径",
+    personality_signature_label: "行为签名",
     guidance_label: "野心程度",
     steps_label: "细节程度",
     workflow_scan: "生成",
@@ -215,6 +227,12 @@ const translations: Record<string, Record<string, string>> = {
     bullet_round_empty_body: "这一轮都溜走了。重新装填，再扫一轮。",
     bullet_round_ready_title: "弹仓仍可开火",
     bullet_round_ready_body: "你可以用已捕获的内容直接开火，或重新装填再来一轮。",
+    curation_title: "捕获之后",
+    curation_hint:
+      "让子弹决定故事表面的意象，再用这两个回答告诉系统：它们为什么重要，以及你拒绝成为什么样的人。",
+    curation_why_title: "你为什么留下这些？",
+    curation_reject_title: "你拒绝的是哪一种未来？",
+    curation_needed: "开火之前，先选出这些碎片为什么留下，以及你拒绝的是哪种未来。",
   },
 };
 

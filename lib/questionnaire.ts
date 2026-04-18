@@ -156,36 +156,36 @@ const ADULT_WORK_STYLE_OPTIONS = withIds("adult-work-style", [
   {
     value: "Quietly, through craft and depth",
     label: {
-      en: "Alone in a room — obsessing over quality",
-      zh: "一个人在房间里——死磕质量",
+      en: "The work gets undeniable before I do",
+      zh: "作品先变得不可忽视，然后才轮到我",
     },
   },
   {
     value: "With a small, trusted team",
     label: {
-      en: "Small squad, high trust, big output",
-      zh: "小队伍，高信任，大产出",
+      en: "One relationship or tiny crew changes what's possible",
+      zh: "一段关系或一支小队，就能改写可能性",
     },
   },
   {
     value: "By building systems and leverage",
     label: {
-      en: "Building machines that work while I sleep",
-      zh: "造一台我睡觉时还在干活的机器",
+      en: "A system starts paying off while I sleep",
+      zh: "我睡着以后，系统开始替我赚钱或推进",
     },
   },
   {
     value: "Through visibility and community",
     label: {
-      en: "Out there — building in public, gathering a crowd",
-      zh: "在外面——公开做事，聚集人群",
+      en: "More people start pulling me into rooms",
+      zh: "越来越多人开始把我拉进更大的房间",
     },
   },
   {
     value: "By navigating rooms, deals, and stakeholders",
     label: {
-      en: "Working the room — deals, dinners, and handshakes",
-      zh: "走人脉——饭局、握手和交易",
+      en: "I keep finding leverage where others only see politics",
+      zh: "别人只看见人情世故，我却总能找到杠杆",
     },
   },
 ]);
@@ -232,29 +232,29 @@ const ADULT_RISK_OPTIONS = withIds("adult-risk", [
   {
     value: "Protect downside first",
     label: {
-      en: "Check the exits before I walk in",
-      zh: "走进去之前先看好出口",
+      en: "Losing years to the wrong bet",
+      zh: "最怕把几年押在一场错误的赌注上",
     },
   },
   {
     value: "Take calculated asymmetric bets",
     label: {
-      en: "Only when the odds are secretly in my favor",
-      zh: "只在概率其实站在我这边时出手",
+      en: "Moving too early and burning trust or capital",
+      zh: "最怕太早出手，把信任或资本烧掉",
     },
   },
   {
     value: "Accept volatility for speed",
     label: {
-      en: "Buckle up — speed has a price and I'll pay it",
-      zh: "系好安全带——速度有代价，我愿意付",
+      en: "Growing safely into someone I never meant to become",
+      zh: "最怕安全地长成一个我根本不想成为的人",
     },
   },
   {
     value: "Go all-in when conviction is high",
     label: {
-      en: "When I know, I go all in",
-      zh: "当我确定的时候，全压",
+      en: "Missing the one moment that actually mattered",
+      zh: "最怕错过那一个真正重要的时刻",
     },
   },
 ]);
@@ -422,55 +422,58 @@ const SKILL_DISPLAY_OPTIONS = withIds("skills", [
 const ADULT_RESOURCE_OPTIONS = withIds("resources", [
   {
     value: "Some savings",
-    label: { en: "A runway of savings", zh: "一段积蓄做的跑道" },
+    label: {
+      en: "I can survive a long runway without panicking",
+      zh: "我能撑过一段很长的跑道，而不至于先慌掉",
+    },
   },
   {
     value: "Steady income",
     label: {
-      en: "Reliable cashflow coming in",
-      zh: "稳定的收入在进来",
+      en: "One stable stream gives me room to make intelligent bets",
+      zh: "一条稳定现金流，给了我做聪明赌注的空间",
     },
   },
   {
     value: "Strong network",
     label: {
-      en: "The right people already know my name",
-      zh: "该认识的人已经认识我",
+      en: "People trust my taste before they trust my status",
+      zh: "别人还没认可我的头衔，已经先认可了我的判断",
     },
   },
   {
     value: "Deep expertise",
     label: {
-      en: "Expertise that took years to build",
-      zh: "花了很多年练出来的专业能力",
+      en: "I can build or solve things faster than I can explain them",
+      zh: "我做成或解开的速度，常常比解释它还快",
     },
   },
   {
     value: "A small team",
     label: {
-      en: "A crew that shows up when I call",
-      zh: "叫得动的一支小队",
+      en: "I already have a small circle that can move with me",
+      zh: "我已经有一小圈人，愿意真的跟我一起动起来",
     },
   },
   {
     value: "Plenty of free time",
     label: {
-      en: "Time — the one resource money can't buy",
-      zh: "时间——钱买不到的那种资源",
+      en: "I can outlast louder people because I still have time",
+      zh: "我还有时间，所以能熬过那些比我更吵的人",
     },
   },
   {
     value: "Family support",
     label: {
-      en: "Family that has my back",
-      zh: "站在我身后的家人",
+      en: "I can take real swings without carrying the whole sky alone",
+      zh: "我可以认真冒险，因为不是一个人扛整片天",
     },
   },
   {
     value: "Rare opportunity",
     label: {
-      en: "A door most people don't even see",
-      zh: "大多数人看不见的一扇门",
+      en: "One quiet opening could compound much harder than it looks",
+      zh: "一个安静出现的机会，复利起来可能比看上去大得多",
     },
   },
 ]);
@@ -537,55 +540,58 @@ const YOUTH_RESOURCE_OPTIONS = withIds("youth-resources", [
 const ADULT_CONSTRAINT_OPTIONS = withIds("constraints", [
   {
     value: "Tight budget",
-    label: { en: "Money is the bottleneck", zh: "钱是瓶颈" },
+    label: {
+      en: "I want freedom, but money pressure gets loud fast",
+      zh: "我想要自由，但钱的压力很快就会变得很吵",
+    },
   },
   {
     value: "Family commitments",
     label: {
-      en: "People I love need me here",
-      zh: "我爱的人需要我在这",
+      en: "I can feel the bigger life, but other people need the current me",
+      zh: "我能感觉到更大的生活在召唤，但眼前的人需要现在的我",
     },
   },
   {
     value: "Visa or location limits",
     label: {
-      en: "Geography or paperwork won't let me move",
-      zh: "地理或证件不让我动",
+      en: "Systems outside me can close the door even when I'm ready",
+      zh: "就算我准备好了，外部系统也可能把门直接关上",
     },
   },
   {
     value: "Lack of experience",
     label: {
-      en: "Haven't earned the credibility yet",
-      zh: "还没攒够信用",
+      en: "I may be capable, but I still look unproven",
+      zh: "我也许有能力，但看起来还是像没被证明过",
     },
   },
   {
     value: "Health challenges",
     label: {
-      en: "My body has its own agenda",
-      zh: "身体有它自己的计划",
+      en: "My body keeps renegotiating the terms",
+      zh: "我的身体一直在重新谈判我能付出的条件",
     },
   },
   {
     value: "Fear of failure",
     label: {
-      en: "The fear of falling flat",
-      zh: "怕摔个大跟头",
+      en: "I hesitate until the window starts to close",
+      zh: "我会犹豫，直到那扇窗开始关上",
     },
   },
   {
     value: "No clear direction",
     label: {
-      en: "A compass that keeps spinning",
-      zh: "指南针一直在转",
+      en: "Every new possibility makes commitment feel like loss",
+      zh: "每出现一个新可能，承诺原来的路就像失去别的自己",
     },
   },
   {
     value: "Too many options",
     label: {
-      en: "Too many doors — can't pick one",
-      zh: "门太多——选不过来",
+      en: "I keep too many paths alive and weaken all of them",
+      zh: "我总把太多路径一起留着，结果每条都被削弱了",
     },
   },
 ]);
@@ -1187,38 +1193,38 @@ const ADULT_ROUTE_OPTION_MAP: Record<string, QuestionnaireOption[]> = {
   ]),
   "Early-career builder": withIds("adult-route-early", [
     {
-      value: "Climbing fast without getting trapped",
+      value: "Turning skill into real leverage",
       label: {
-        en: "Rising fast — but I feel the golden handcuffs tightening",
-        zh: "上升很快——但感觉镀金手铐越来越紧",
+        en: "I may be better than my current life proves",
+        zh: "我可能比现在这份生活证明出来的要强得多",
       },
     },
     {
-      value: "Turning skill into real leverage",
+      value: "Climbing fast without getting trapped",
       label: {
-        en: "I'm good at this — how do I turn it into real power?",
-        zh: "我擅长这个——怎么把它变成真正的筹码？",
+        en: "If I commit, I lose alternatives; if I don't, I lose time",
+        zh: "一旦投入，我会失去别的可能；不投入，我又会失去时间",
       },
     },
     {
       value: "Choosing between prestige and upside",
       label: {
-        en: "Shiny brand name or real upside — can't have both",
-        zh: "光鲜名号还是真正的上行空间——不能兼得",
+        en: "The impressive path and the alive path are no longer the same",
+        zh: "看上去体面的路，和真正让我活过来的路，已经不是同一条了",
       },
     },
     {
       value: "Building a reputation people notice",
       label: {
-        en: "I do great work but I'm still invisible",
-        zh: "活干得漂亮但还是没人看见",
+        en: "The work is improving faster than my position is",
+        zh: "我的作品进步得比我的位置更快",
       },
     },
     {
       value: "Escaping a role that is too small",
       label: {
-        en: "I've outgrown this role and everyone sees it except my boss",
-        zh: "我已经大过这个角色了，除了老板谁都看得出",
+        en: "I can feel momentum nearby, but not attached to me yet",
+        zh: "我能感觉到势能就在附近，但还没有附着到我身上",
       },
     },
   ]),
@@ -1683,29 +1689,29 @@ const INFLECTION_OPTIONS: Record<InflectionTension, QuestionnaireOption[]> = {
     {
       value: "A single piece of work gets noticed by the right person",
       label: {
-        en: "One project lands on the right desk — and everything changes",
-        zh: "一个项目落在了对的人桌上——一切都变了",
+        en: "One piece of work becomes impossible to ignore",
+        zh: "有一件作品终于变得无法被忽视",
       },
     },
     {
       value: "I finish the thing I have been circling for years",
       label: {
-        en: "I finally finish the thing I've been afraid to complete",
-        zh: "我终于完成了那件我一直不敢收尾的事",
+        en: "Finishing one thing forces a bigger version of me to appear",
+        zh: "把一件事做完，会逼出一个更大的我",
       },
     },
     {
       value: "Someone offers to fund or back my quiet obsession",
       label: {
-        en: "Someone says: I'll pay you to do that thing you do alone at night",
-        zh: "有人说：我付钱让你做你每晚独自做的那件事",
+        en: "Someone offers fuel for the thing I can no longer call a hobby",
+        zh: "有人愿意为那件我再也不能叫它爱好的事加油",
       },
     },
     {
       value: "I realize craft alone will not be enough",
       label: {
-        en: "I accept that great work doesn't sell itself — and learn to sell",
-        zh: "我接受好作品不会自己卖——然后学会销售",
+        en: "Privacy stops being a strategy and starts being a ceiling",
+        zh: "隐身不再是一种策略，而开始变成天花板",
       },
     },
   ]),
@@ -1713,29 +1719,29 @@ const INFLECTION_OPTIONS: Record<InflectionTension, QuestionnaireOption[]> = {
     {
       value: "Something I post goes unexpectedly viral",
       label: {
-        en: "I put something out there and it blows up — now what?",
-        zh: "我发了个东西火了——然后呢？",
+        en: "A public moment makes privacy no longer viable",
+        zh: "一个公开时刻让继续低调变得不再可行",
       },
     },
     {
       value: "I get invited to a stage I thought was years away",
       label: {
-        en: "An invitation arrives that I thought was meant for someone bigger",
-        zh: "一个邀请来了，我以为那是给更厉害的人的",
+        en: "A relationship or invitation opens a door I can't politely decline",
+        zh: "一段关系或一个邀请，打开了一扇我很难礼貌拒绝的门",
       },
     },
     {
       value: "A public failure teaches me the downside is survivable",
       label: {
-        en: "I fail publicly — and discover nobody actually cares that much",
-        zh: "我公开失败了——然后发现其实没人那么在意",
+        en: "Embarrassment arrives first and turns out to be survivable",
+        zh: "尴尬先来了，但最后发现它其实撑得过去",
       },
     },
     {
       value: "I stop hedging and commit to being seen",
       label: {
-        en: "I drop the safety net and say: this is what I do, judge me",
-        zh: "我扔掉安全网说：这就是我做的事，评判我吧",
+        en: "I stop rehearsing visibility and actually enter it",
+        zh: "我不再排练被看见，而是真的走进去",
       },
     },
   ]),
@@ -1743,29 +1749,29 @@ const INFLECTION_OPTIONS: Record<InflectionTension, QuestionnaireOption[]> = {
     {
       value: "A system I built starts generating value while I sleep",
       label: {
-        en: "The machine finally runs without me — first real leverage",
-        zh: "机器终于不需要我了——第一次真正的杠杆",
+        en: "Something I built starts demanding a bigger life around it",
+        zh: "我造出来的东西，开始反过来要求我给它配上一种更大的生活",
       },
     },
     {
       value: "I burn out and realize speed was not the answer",
       label: {
-        en: "I hit a wall and discover that faster isn't always further",
-        zh: "我撞了墙，发现更快不一定更远",
+        en: "My body forces a pace correction I would never choose alone",
+        zh: "我的身体逼我做一次自己绝不会主动选的速度修正",
       },
     },
     {
       value: "A competitor validates my space and I have to scale or die",
       label: {
-        en: "Someone else enters my space — scale now or get swallowed",
-        zh: "别人进了我的赛道——要么扩张要么被吞",
+        en: "The market makes staying small more dangerous than scaling",
+        zh: "市场让继续维持小规模，比扩张还危险",
       },
     },
     {
       value: "I find a partner who handles what I cannot",
       label: {
-        en: "I meet the person who does the part I'm terrible at",
-        zh: "我遇到了那个能做我做不好的部分的人",
+        en: "One partner changes the speed and shape of the next chapter",
+        zh: "一个搭档，直接改写了下一章的速度和形状",
       },
     },
   ]),
@@ -1773,36 +1779,36 @@ const INFLECTION_OPTIONS: Record<InflectionTension, QuestionnaireOption[]> = {
     {
       value: "An unexpected opportunity forces a fast decision",
       label: {
-        en: "A door opens with a deadline — decide now or it closes",
-        zh: "一扇门打开了但有截止日期——现在决定否则它关上",
+        en: "A door opens with a deadline and removes the luxury of theory",
+        zh: "一扇门带着截止日期打开，让空谈失去余地",
       },
     },
     {
       value: "A relationship or partnership reshapes my direction",
       label: {
-        en: "Someone walks into my life and rearranges the priorities",
-        zh: "有人走进我的生活，重新排列了优先级",
+        en: "A relationship opens a door I can't politely decline",
+        zh: "一段关系打开了一扇我很难礼貌拒绝的门",
       },
     },
     {
       value: "I let go of something I thought defined me",
       label: {
-        en: "I drop the thing I was holding too tightly — and feel lighter",
-        zh: "我放下了一直紧紧抓着的东西——然后感觉轻了",
+        en: "Leaving becomes easier than staying",
+        zh: "留下变得比离开更难了",
       },
     },
     {
       value: "An external shock forces reinvention",
       label: {
-        en: "The ground shifts — layoff, move, loss — and I rebuild from it",
-        zh: "地面震动了——裁员、搬家、失去——我从废墟中重建",
+        en: "Money pressure or circumstance strips away my hedging",
+        zh: "钱的压力或环境的震动，把我的犹豫和对冲都撕掉了",
       },
     },
     {
       value: "I finally start the thing I have been planning for too long",
       label: {
-        en: "I stop planning and press 'go' — messy, imperfect, alive",
-        zh: "我不再计划，按下'开始'——混乱、不完美、活着",
+        en: "I stop planning and create the conditions the next self requires",
+        zh: "我不再只做计划，而开始创造下一个自己真正需要的条件",
       },
     },
   ]),
@@ -1835,26 +1841,21 @@ export function getQuestionnaireSteps(
       id: "trajectoryFocus",
       title: youth
         ? {
-            en: "What keeps you up at night about this stage?",
-            zh: "在这个阶段，什么事让你夜里睡不着？",
-          }
-        : ageGroup === "senior"
-        ? {
-            en: "What's the tension that keeps circling back?",
-            zh: "什么矛盾一直在反复出现？",
+            en: "What makes this chapter unstable in an interesting way?",
+            zh: "这一章里，哪种不稳定最值得认真对待？",
           }
         : {
-            en: "Where does it actually hurt on this path?",
-            zh: "在这条路上，真正痛的是哪？",
+            en: "What makes this chapter unstable in an interesting way?",
+            zh: "这一章里，哪种不稳定最值得认真对待？",
           },
       description: youth
         ? {
-            en: "Pick the one that hit you in the gut.",
-            zh: "选那个让你心里一紧的。",
+            en: "Pick the contradiction that feels most alive.",
+            zh: "选那个最有生命力、最带矛盾感的。",
           }
         : {
-            en: "The tension you'd describe if no one was judging.",
-            zh: "如果没人评判，你会怎么描述那个张力。",
+            en: "Pick the contradiction that keeps giving this chapter its charge.",
+            zh: "选那个不断给这一章注入张力的矛盾。",
           },
       mode: "single",
       options: routeOptions,
@@ -1890,21 +1891,16 @@ export function getQuestionnaireSteps(
       id: "inflection",
       title: youth
         ? {
-            en: "What would have to happen in the next 6 months to change everything?",
-            zh: "未来6个月内发生什么会改变一切？",
-          }
-        : ageGroup === "senior"
-        ? {
-            en: "What would have to happen soon to unlock the next chapter?",
-            zh: "什么事必须尽快发生才能打开下一章？",
+            en: "What kind of event would force the next version of you to appear?",
+            zh: "什么样的事件，会逼出下一个版本的你？",
           }
         : {
-            en: "What would have to happen in the next 6 months to change everything?",
-            zh: "未来6个月内发生什么会改变一切？",
+            en: "What kind of event would force the next version of you to appear?",
+            zh: "什么样的事件，会逼出下一个版本的你？",
           },
       description: {
-        en: "The inflection point that turns planning into momentum.",
-        zh: "把计划变成势能的那个转折点。",
+        en: "Choose the rupture that would make hedging harder than becoming.",
+        zh: "选那个会让继续犹豫比真正改变更难的裂口。",
       },
       mode: "single",
       options: INFLECTION_OPTIONS[inflectionTension],
@@ -2113,25 +2109,14 @@ function getBaseSteps(youth: boolean, ageGroup: AgeGroup = youth ? "youth" : "tw
     },
     {
       id: "resources",
-      title: youth
-        ? {
-            en: "What advantages do you have that most people your age don't?",
-            zh: "你有哪些同龄人大多没有的优势？",
-          }
-        : ageGroup === "senior"
-        ? {
-            en: "What have you accumulated that money can't buy?",
-            zh: "你积累了哪些钱买不到的东西？",
-          }
-        : ageGroup === "twenties"
-        ? {
-            en: "What do you have going for you that most people don't see?",
-            zh: "你有什么别人看不到的优势？",
-          }
-        : {
-            en: "What cards do you already have in your hand?",
-            zh: "你手里已经握着什么牌？",
-          },
+      title: {
+        en: "Which advantage matters more than it looks?",
+        zh: "哪一种优势，比表面看起来更重要？",
+      },
+      description: {
+        en: "Pick the asymmetry you could quietly build a future around.",
+        zh: "选那个你可以悄悄围着它建立未来的不对称优势。",
+      },
       mode: "multi",
       maxSelect: 3,
       options: youth
@@ -2140,25 +2125,14 @@ function getBaseSteps(youth: boolean, ageGroup: AgeGroup = youth ? "youth" : "tw
     },
     {
       id: "constraints",
-      title: youth
-        ? {
-            en: "What's the wall you keep running into?",
-            zh: "你一直在撞的那堵墙是什么？",
-          }
-        : ageGroup === "senior"
-        ? {
-            en: "What's the thing that makes you wonder if it's too late?",
-            zh: "什么事让你怀疑是不是已经太晚了？",
-          }
-        : ageGroup === "twenties"
-        ? {
-            en: "What's the thing nobody warned you about?",
-            zh: "什么事是没人提醒过你的？",
-          }
-        : {
-            en: "What makes you sigh when you're honest with yourself?",
-            zh: "对自己诚实的时候，什么事让你叹气？",
-          },
+      title: {
+        en: "What kind of trap do you keep falling into?",
+        zh: "你总会掉进哪一种陷阱里？",
+      },
+      description: {
+        en: "Choose the repeating pattern that quietly weakens momentum.",
+        zh: "选那个会悄悄削弱势能、反复出现的模式。",
+      },
       mode: "multi",
       maxSelect: 3,
       options: youth
@@ -2194,18 +2168,17 @@ function getBaseSteps(youth: boolean, ageGroup: AgeGroup = youth ? "youth" : "tw
       id: "workStyle",
       title: youth
         ? {
-            en: "How will people first notice you're different?",
-            zh: "别人最先会因为什么发现你不一样？",
-          }
-        : ageGroup === "senior"
-        ? {
-            en: "At this point, how do you actually get things done?",
-            zh: "到了这个阶段，你实际上是怎么把事做成的？",
+            en: "When things start working for you, what is usually carrying the momentum?",
+            zh: "当事情开始对你有效时，通常是什么在带动势能？",
           }
         : {
-            en: "When you're in your zone, what does it look like?",
-            zh: "当你进入状态时，那是什么样子？",
+            en: "When things start working for you, what is usually carrying the momentum?",
+            zh: "当事情开始对你有效时，通常是什么在带动势能？",
           },
+      description: {
+        en: "Pick the channel your power tends to arrive through.",
+        zh: "选那个你的力量最常通过它进入世界的渠道。",
+      },
       mode: "single",
       options: youth
         ? YOUTH_WORK_STYLE_OPTIONS
@@ -2215,18 +2188,17 @@ function getBaseSteps(youth: boolean, ageGroup: AgeGroup = youth ? "youth" : "tw
       id: "riskTolerance",
       title: youth
         ? {
-            en: "Your friends think your idea is crazy. How does that make you feel?",
-            zh: "朋友们觉得你的想法太疯了。你感觉怎样？",
-          }
-        : ageGroup === "senior"
-        ? {
-            en: "You have one big bet left in you. How do you play it?",
-            zh: "你还剩一次大赌注的机会。你怎么用？",
+            en: "When the future is unclear, which mistake do you fear more?",
+            zh: "当未来不清楚时，你更怕犯哪一种错？",
           }
         : {
-            en: "A high-stakes bet lands on the table. What do you do?",
-            zh: "一个高风险赌注摆上了桌。你怎么办？",
+            en: "When the future is unclear, which mistake do you fear more?",
+            zh: "当未来不清楚时，你更怕犯哪一种错？",
           },
+      description: {
+        en: "Choose the failure mode that most strongly governs your threshold behavior.",
+        zh: "选那个最能支配你出手阈值的失败方式。",
+      },
       mode: "single",
       options: youth
         ? YOUTH_RISK_OPTIONS

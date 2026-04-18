@@ -2,14 +2,25 @@
 
 This note explains the repo at the product-logic level rather than the UI level.
 
-The core thesis is simple: this app is a staged interview plus user-guided latent selection plus iterative LLM refinement. It borrows the language of "diffusion," but the implementation is not a true diffusion model. The runtime is a sequence of prompt builds, one human curation step, and a linear chain of rewrites.
+The current system is:
+
+1. A staged questionnaire that collects factual guardrails plus dramatic tension
+2. A scan pass that generates 10 unresolved future fragments
+3. A user-curated bullet phase that chooses visible story motifs
+4. A hidden conditioning layer that compresses questionnaire data into latent forces
+5. A linear rewrite chain that turns selected motifs into a trajectory
+6. A final anti-echo cleanup pass that strips questionnaire-sounding prose
+
+The app still borrows the language of "diffusion," but the runtime is not a true diffusion model. It is a prompt chain with one human curation checkpoint and one final cleanup rewrite.
 
 ## Source Map
 
 The logic described here comes primarily from these files:
 
 - `lib/questionnaire.ts`
+- `components/InputForm.tsx`
 - `components/Big5Form.tsx`
+- `app/page.tsx`
 - `lib/prompts.ts`
 - `hooks/useGeneration.ts`
 - `lib/revolver.ts`
@@ -17,13 +28,45 @@ The logic described here comes primarily from these files:
 - `lib/providers.ts`
 - `types/index.ts`
 
-The key data shapes discussed below are `QuestionnaireAnswers`, `Fields`, `NoiseFragment`, `Bullet`, `RunPhase`, and the inputs to `generateStepPrompt(step, totalSteps, state, guidance, prev, lang)`.
+The key data shapes discussed below are:
+
+- `QuestionnaireAnswers`
+- `Fields`
+- `CurationAnswers`
+- `StoryConditioning`
+- `NoiseFragment`
+- `Bullet`
+- `RunPhase`
+
+The key prompt entry point is now:
+
+```ts
+generateStepPrompt(step, totalSteps, conditioning, guidance, prev, lang)
+```
+
+not the older `state`-string interface.
+
+## Product Thesis
+
+The redesign changed the product goal from:
+
+> "describe yourself, then narrativize the description"
+
+to:
+
+> "reveal your tensions, then turn those tensions into a future shape"
+
+That produces three important separations:
+
+- questionnaire answers define causality, boundary conditions, and plausibility
+- selected bullets define imagery, scenes, motifs, and memorable turns
+- the final cleanup pass removes direct profile paraphrase if it leaks back in
 
 ## What The App Asks
 
-### Fixed questionnaire inputs
+### Base questionnaire
 
-The questionnaire always begins from a shared base shape assembled by `getBaseSteps(...)` in `lib/questionnaire.ts`.
+The questionnaire still begins from a shared base shape assembled by `getBaseSteps(...)` in `lib/questionnaire.ts`.
 
 The fixed inputs are:
 
@@ -38,470 +81,420 @@ The fixed inputs are:
 - `riskTolerance`
 - `timeHorizon`
 
-These are not free-text fields. They are chosen from curated option pools, with each choice represented by a canonical `value` string and a display-oriented `label`.
+These are still curated option pools, not free text.
 
-At a logic level, the app is trying to collect four kinds of information:
+What changed is the user-facing copy:
 
-1. Life stage and current chapter
-   - `age`
-   - `mobility`
-   - `currentMode`
+- `resources` now asks for hidden asymmetry rather than inventory
+- `constraints` now asks for repeating traps rather than static problems
+- `workStyle` now asks how momentum usually arrives
+- `riskTolerance` now asks which error the person fears more
+- `trajectoryFocus` now asks what makes the chapter unstable in an interesting way
+- `inflection` now asks what kind of event would force the next version of the person to appear
 
-2. Current assets and constraints
-   - `skills`
-   - `resources`
-   - `constraints`
-
-3. Inner motive force
-   - `obsessions`
-   - `workStyle`
-   - `riskTolerance`
-   - `timeHorizon`
-
-4. Personality modulation
-   - handled separately via the Big Five sliders
+The backend schema did not get rebuilt. The canonical `value` strings still drive routing and normalization. The `label` strings got rewritten to feel more dramatic and less profile-like.
 
 ### Dynamic question: `trajectoryFocus`
 
-`trajectoryFocus` is not part of the fixed base questionnaire. It is inserted dynamically by `getQuestionnaireSteps(...)` when the app can infer a route-specific tension from the combination of:
+`trajectoryFocus` is still conditional. It is inserted by `getQuestionnaireSteps(...)` when the app can infer a route-specific tension from:
 
 - age group
 - `currentMode`
 
-The logic is:
+The logic is unchanged:
 
-- Derive `ageGroup` from `age`
-  - `"Under 20"` -> `youth`
-  - `"20–29"` -> `twenties`
-  - `"30–44"` -> `midcareer`
-  - `"45+"` -> `senior`
-- Use `currentMode` to look up a route-specific option list from either `YOUTH_ROUTE_OPTION_MAP` or `ADULT_ROUTE_OPTION_MAP`
-- Add any age-specific route-tension bonus options from `AGE_ROUTE_BONUS`
-- If the merged route option list is non-empty, insert `trajectoryFocus` immediately after the first three steps
+- derive `ageGroup` from `age`
+- select route options from `YOUTH_ROUTE_OPTION_MAP` or `ADULT_ROUTE_OPTION_MAP`
+- append age-specific route bonuses from `AGE_ROUTE_BONUS`
+- insert the step after the first three questions when at least one route option exists
 
-So the app does not ask a generic "what matters most?" follow-up. It asks a route-specific tension question that is conditioned by who the person is and what kind of chapter they say they are currently in.
+What changed is the framing. The prompt copy is now tension-first:
 
-Examples:
+- title: `What makes this chapter unstable in an interesting way?`
+- description: choose the contradiction that gives the chapter its charge
 
-- A `twenties` user in `Early-career builder` can get tensions like `Turning skill into real leverage` plus age-specific bonuses like `The friends who stayed safe are already ahead financially`.
-- A `senior` user in `Second act after the main career` can get tensions like `Starting over feels exciting and terrifying at once`.
+So the logic is still route-conditioned, but the experience feels less like a career form and more like a pressure-reading instrument.
 
 ### Dynamic question: `inflection`
 
-`inflection` is also conditional. It is appended to the questionnaire only if `getInflectionTension(riskTolerance, workStyle)` returns a non-null result.
+`inflection` is still appended only if `getInflectionTension(riskTolerance, workStyle)` returns a non-null value.
 
-That logic groups combinations into four tension types:
+The four tension groups are unchanged:
 
 - `bold-craft`
 - `cautious-visible`
 - `speed-system`
 - `generic`
 
-Examples of trigger patterns:
+The routing still keys off canonical values such as:
 
-- Bold risk plus quiet craft:
-  - risk like `Go all-in when conviction is high`
-  - work style like `Quietly, through craft and depth`
-  - result: `bold-craft`
+- quiet craft plus bold risk -> `bold-craft`
+- visibility plus conservative risk -> `cautious-visible`
+- systems plus speed-oriented risk -> `speed-system`
+- all other valid pairs -> `generic`
 
-- Conservative risk plus visibility:
-  - risk like `Protect downside first`
-  - work style like `Through visibility and community`
-  - result: `cautious-visible`
+What changed is the wording. The step now asks for a rupture rather than a nice milestone:
 
-- Speed-oriented risk plus systems:
-  - risk like `Accept volatility for speed`
-  - work style like `By building systems and leverage`
-  - result: `speed-system`
-
-If both `riskTolerance` and `workStyle` exist but do not match a more specific pair, the app still falls back to `generic`.
-
-The resulting `inflection` question is meant to force one near-term turning point into the input state. It asks, in effect, "what event in the next chapter would actually change the trajectory?"
+- title: `What kind of event would force the next version of you to appear?`
+- description: choose the rupture that makes hedging harder than becoming
 
 ### Skill-based option expansion
 
-The questionnaire also changes the available `resources` and `constraints` options based on selected `skills`.
+The questionnaire still expands `resources` and `constraints` based on selected `skills`.
 
-This happens in both:
+This still happens in:
 
 - `getQuestionnaireSteps(...)`
 - `normalizeQuestionnaireAnswers(...)`
 
 Examples:
 
-- Selecting `Tech & Engineering` can add `Open-source reputation` as a resource and `Automation anxiety — my own tools could replace me` as a constraint.
-- Selecting `Writing & Media` can add `An audience that trusts my voice` as a resource and `Algorithms decide who hears me` as a constraint.
+- `Tech & Engineering` adds `Open-source reputation` and `Automation anxiety — my own tools could replace me`
+- `Writing & Media` adds `An audience that trusts my voice` and `Algorithms decide who hears me`
 
-This means the app is not only asking "what are your resources?" It is reframing what counts as a plausible resource or bottleneck based on the user's domain of competence.
+So the app still adapts what counts as a plausible asset or bottleneck based on domain context.
 
-## Personality And Controls
+## Inputs Outside The Questionnaire
 
-The logic collects a second input layer outside the questionnaire:
+There are now two separate non-questionnaire input layers.
 
-- Big Five sliders
-  - `openness`
-  - `conscientiousness`
-  - `extraversion`
-  - `agreeableness`
-  - `neuroticism`
+### Big Five sliders
+
+`components/Big5Form.tsx` still collects five 1-10 scores keyed from `BIG5_KEYS`:
+
+- openness
+- conscientiousness
+- extraversion
+- agreeableness
+- neuroticism
+
+The important redesign change is that the prompt layer no longer sends these as named Big Five traits with explicit "high openness means X" instructions.
+
+Instead, `buildStoryConditioning(...)` in `lib/prompts.ts` converts them into a behavioral signature:
+
+- `noveltyAppetite`
+- `consistencyPressure`
+- `socialPropulsion`
+- `conflictTolerance`
+- `anticipatorySensitivity`
+- `combinedReading`
+
+Examples of the tone of this conversion:
+
+- "moves toward novelty before full permission exists"
+- "builds slowly, privately, and convincingly"
+- "feels the future intensely enough that doubt and drive keep taking turns at the wheel"
+
+So personality is now encoded as causal behavior, not diagnostic labels.
+
+### Post-curation answers
+
+After bullet selection, the user now supplies two more signals in `app/page.tsx`:
+
+```ts
+type CurationAnswers = {
+  whyThese: string;
+  rejectedFuture: string;
+};
+```
+
+These are not part of `QuestionnaireAnswers`.
+
+They are collected after the scan/bullet phase using fixed option sets:
+
+- `whyThese`
+  - "They feel like my best life"
+  - "They feel dangerous but true"
+  - "They feel embarrassing to want"
+  - "They feel more real than the rest"
+  - "I don't know why, but they stick"
+- `rejectedFuture`
+  - "too safe"
+  - "too performative"
+  - "too lonely"
+  - "too chaotic"
+  - "too ordinary"
+  - "too borrowed from other people"
+
+These are not visible motifs either. They only shape hidden conditioning.
+
+## Controls
+
+The app still also collects:
+
 - `guidance`
 - `denoiseSteps`
 - `provider`
 - `model`
 
-### Big Five
-
-`components/Big5Form.tsx` renders five 1-10 sliders keyed from `BIG5_KEYS` in `lib/constants.ts`.
-
-The model never receives these as raw UI controls. `buildStateString(...)` turns each score into a level description:
-
-- `<= 3` -> `low`
-- `<= 5` -> `moderate`
-- `<= 7` -> `moderately high`
-- otherwise -> `high`
-
-The prompt builder also injects a fixed interpretation layer:
-
-- high openness -> unconventional pivots
-- high conscientiousness -> systematic empire-building
-- high extraversion -> network-driven success
-- low agreeableness -> disruptive moves
-- high neuroticism -> intense creative or emotional breakthroughs
-
-So the Big Five values do not add new factual content. They change the expected mechanism of change inside the generated life path.
-
 ### Guidance
 
-`guidance` is a 1-10 ambition/intensity dial.
+`guidance` is still the ambition/intensity dial.
 
-Its effects are:
+It affects:
 
-- It changes the scan prompt tone:
-  - high guidance: `high-energy, vivid, sharp, but never slogan-like`
-  - middle guidance: `grounded, tense, quietly magnetic`
-  - low guidance: `small, intimate, understated, lightly uncanny`
-- It changes the denoise prompt framing:
-  - high guidance: `dramatic pivots, unexpected breakthroughs, biography-worthy`
-  - middle guidance: `ambitious but grounded, notable achievements`
-  - low guidance: `meaningful, well-lived, not flashy`
+- scan tone
+- denoise ambition framing
 
-So `guidance` is not "creativity" or "temperature." It is an instruction about how extraordinary the resulting life arc should feel.
+The buckets remain:
+
+- high: dramatic pivots, unexpected breakthroughs, biography-worthy
+- middle: ambitious but grounded, notable achievements
+- low: meaningful, well-lived, not flashy
 
 ### Denoise steps
 
-`denoiseSteps` ranges from 2 to 8.
+`denoiseSteps` still ranges from 2 to 8.
 
-It determines how many total logical phases appear in the generation chain:
+The runtime call structure is now:
 
 - 1 scan call
-- `denoiseSteps - 1` rewrite calls
+- `denoiseSteps - 1` denoise calls
+- 1 cleanup call
+
+So the total model-call count is:
+
+```text
+denoiseSteps + 1
+```
 
 Examples:
 
-- `denoiseSteps = 2` -> 1 scan call + 1 final trajectory call
-- `denoiseSteps = 4` -> 1 scan call + 3 denoise calls
-- `denoiseSteps = 8` -> 1 scan call + 7 denoise calls
+- `denoiseSteps = 2` -> 1 scan + 1 final denoise + 1 cleanup
+- `denoiseSteps = 4` -> 1 scan + 3 denoise + 1 cleanup
 
-More steps do not create more candidate stories. They create more rewrite passes on the same evolving story.
+The UI step labels still split later steps into `structure`, `sharpen`, and `refine` using `getStepLabel(...)`, but the prompt templates themselves are simpler than the older version:
+
+- scan
+- early structure (`progress < 0.45`)
+- sharpen/revise (`progress >= 0.45` and not final)
+- final trajectory
+- cleanup
 
 ### Provider and model
 
-The user also chooses a provider and model. `app/page.tsx` passes both through the hook and eventually into `/api/generate`.
+This logic is unchanged:
 
-At the logic level:
-
-- `provider` chooses which upstream API adapter is used
+- `provider` chooses the upstream adapter in `lib/providers.ts`
 - `model` chooses the concrete model name sent to that provider
 
-The prompt chain itself does not change by provider. The system relies on `lib/providers.ts` to normalize output back into the Anthropic-style response shape expected by the client.
+The prompt chain itself does not vary by provider.
 
-## Normalization And State Encoding
+## Normalization And Encoding
 
 ### `QuestionnaireAnswers` -> normalized answers
 
-The raw questionnaire state is a `QuestionnaireAnswers` map from step id to selected string array.
+`normalizeQuestionnaireAnswers(...)` still makes questionnaire state self-healing.
 
-Before story generation, the app runs `normalizeQuestionnaireAnswers(...)`. This does several important things:
+It:
 
-1. Re-derives the valid step set from the current `age` and age group
-2. Rebuilds the step option pools, including skill-based bonus options
-3. Filters each selected value against the currently valid option set
+1. Re-derives valid steps from `age`
+2. Rebuilds route-conditioned and skill-conditioned option pools
+3. Filters selected values against the currently valid option set
 4. Truncates single-choice steps to one value
-5. Truncates multi-choice steps to the configured `maxSelect`
-6. Re-validates `trajectoryFocus` against the currently valid route options
+5. Truncates multi-choice steps to `maxSelect`
+6. Re-validates `trajectoryFocus`
 7. Keeps at most one `inflection` answer
 
-This makes the questionnaire state self-healing. If earlier answers change, downstream answers that are no longer legal are dropped instead of silently leaking into generation.
+So earlier answer changes still invalidate downstream choices automatically.
 
 ### Normalized answers -> `Fields`
 
-`buildFieldsFromAnswers(...)` converts normalized answers into the flatter `Fields` shape used by the prompt system.
+`buildFieldsFromAnswers(...)` still flattens normalized answers into `Fields`.
 
-Important transformations:
+Important details:
 
-- `mobility` is duplicated into `location`
-  - `const location = mobility;`
-- single-choice fields remain scalar strings
-- multi-select fields are joined into comma-separated strings
+- `location` is still copied from `mobility`
+- single-choice fields stay scalar
+- multi-select fields are still joined into comma-separated strings:
   - `skills`
   - `resources`
   - `constraints`
   - `obsessions`
 
-This flattening matters because the prompt builder does not know about UI steps or arrays. It only sees a compact profile object.
+This flattened shape still exists because the hook and conditioning builder consume one normalized object, not raw UI arrays.
 
-### `Fields` + Big Five -> `state`
+### `Fields` + Big Five + curation -> `StoryConditioning`
 
-`buildStateString(fields, big5)` assembles the final life-state description that every model call sees.
+This is the biggest architectural change.
 
-The structure is:
+The old `buildStateString(...)` no longer exists. The interview layer no longer emits one prompt-visible profile paragraph.
 
-```text
-Age: ...
-Location: ...
-Mobility: ...
-Current chapter: ...
-Current route tension: ...
-Skills: ...
-Resources & advantages: ...
-Constraints: ...
-Obsessions & drives: ...
-Preferred way of winning: ...
-Risk posture: ...
-Time horizon: ...
-Near-term inflection point: ...
+Instead, `buildStoryConditioning(...)` returns:
 
-Personality (Big Five):
-openness: ...
-conscientiousness: ...
-extraversion: ...
-agreeableness: ...
-neuroticism: ...
+```ts
+type StoryConditioning = {
+  hardState: {
+    ageBand: string;
+    mobility: string;
+    chapter: string;
+    horizon: string;
+    anchorResource?: string;
+    anchorConstraint?: string;
+    secondaryConstraint?: string;
+  };
+  latentForces: {
+    coreTension: string;
+    momentumPattern: string;
+    exposurePattern: string;
+    riskPattern: string;
+    identityPressure: string;
+    likelyTransformation: string;
+    selectionCharge?: string;
+    rejectedGravity?: string;
+  };
+  personalitySignature: {
+    noveltyAppetite: string;
+    consistencyPressure: string;
+    socialPropulsion: string;
+    conflictTolerance: string;
+    anticipatorySensitivity: string;
+    combinedReading: string;
+  };
+};
 ```
 
-This is the actual logical interface between the interview layer and the generation layer.
+This object is built heuristically in `lib/prompts.ts`.
 
-## Exact Prompt Chain
+Important properties of the implementation:
 
-Every model call is built by `generateStepPrompt(step, totalSteps, state, guidance, prev, lang)` in `lib/prompts.ts`.
+- `hardState` keeps explicit guardrails
+- `anchorResource` is derived from the first selected resource
+- `anchorConstraint` and `secondaryConstraint` are derived from the first two selected constraints
+- `latentForces` are synthesized from canonical questionnaire values and, when available, post-curation answers
+- `personalitySignature` is derived from Big Five scores without using trait names in the prompt text
 
-If `lang !== "en"`, every prompt gets this exact suffix appended:
+This means the questionnaire is no longer prompt-visible in raw form. The model sees an interpretation of the questionnaire, not a replay of the questionnaire.
+
+### Scan conditioning vs denoise conditioning
+
+The hook uses two slightly different conditioning contexts:
+
+- `scanNoiseFragments()` calls `buildStoryConditioning(fields, big5)`
+- `generate()` calls `buildStoryConditioning(fields, big5, curationAnswers)`
+
+So:
+
+- the scan prompt does not know why the user kept specific bullets
+- the denoise chain does know that
+
+This is intentional. The curation answers only make sense after the user has actually seen and chosen fragments.
+
+## Prompt Chain
+
+All prompts are assembled in `lib/prompts.ts`.
+
+### Shared formatting
+
+`formatConditioning(...)` renders the hidden state as three sections:
+
+- `BOUNDARY CONDITIONS`
+- `LATENT FORCES`
+- `PERSONALITY SIGNATURE`
+
+If `lang !== "en"`, the prompt also gets:
 
 ```text
-
 IMPORTANT: Respond entirely in ${LANG_NAMES[lang] || lang}.
 ```
 
-Below are the exact prompt templates as they exist in source, followed by a short note on what each prompt is trying to force.
-
 ### 1. Scan prompt
 
-```text
-You are scanning the earliest unresolved signals of a person's future trajectory.
+The scan prompt now receives:
 
-CURRENT STATE:
-${state}
+- formatted conditioning
+- generic world-state rule
+- guidance scale
 
-PERSONALITY SIGNALS:
-${personality}
+Its job is still to generate exactly 10 unresolved fragments.
 
-WORLD STATE:
-${worldState}
+The important difference from the old version is that it no longer sees:
 
-GUIDANCE SCALE: ${guidance}/10
+- raw questionnaire labels
+- explicit Big Five trait names
+- one giant profile recap
 
-TASK:
-Generate exactly 10 raw future fragments.
+So scan is now derived from compressed forces, not from a plain-English state dump.
 
-These are not predictions, not advice, not summaries, not slogans.
-They are unresolved fragments from possible futures — partial scenes, tensions, impulses, environments, losses, freedoms, habits, or systems that might later become a life.
+### 2. Early structure prompt
 
-Each fragment must:
-- be 4-12 words
-- stand alone
-- feel emotionally charged but still unfinished
-- suggest a future shape without explaining it
-- be interpretable in more than one way
-- avoid complete moral conclusions or polished "quote-like" phrasing
-- avoid personality trait labels
-- avoid direct advice, destiny claims, or biography summary language
+For non-final denoise steps where `progress < 0.45`, the prompt asks the model to:
 
-Distribution requirements:
-- at least 2 fragments should hint at work / money / systems
-- at least 2 should hint at relationships / social position / visibility
-- at least 2 should hint at place / movement / environment
-- at least 2 should hint at inner cost / freedom / loss / desire
-- the remaining 2 can be strange, symbolic, or contradictory
+- shape possible causality from selected fragments
+- treat selected fragments as the only valid surface motifs
+- use the profile only as hidden causality
+- avoid restating the profile as prose
+- avoid questionnaire phrase reuse
 
-Tone:
-${guidance >= 7 ? "high-energy, vivid, sharp, but never slogan-like" : guidance >= 4 ? "grounded, tense, quietly magnetic" : "small, intimate, understated, lightly uncanny"}
+This is the core anti-echo rule.
 
-Important:
-Do NOT make them all sound equally poetic.
-Some should be plain, some strange, some sharp, some quiet.
-Do NOT make them read like a coherent set of themes.
-They should feel like fragments from different corners of the same latent space.
+### 3. Sharpen/revise prompt
 
-Format exactly:
-1::...
-2::...
-...
-10::...
+For later non-final steps, the prompt asks the model to:
 
-Respond with only the 10 fragments.${langInstruction}
-```
+- preserve surface motifs
+- add decisions, sacrifices, and social consequences
+- show what gets easier and what gets more expensive
+- avoid direct reuse of questionnaire phrases
+- make the story feel discovered rather than assembled
 
-What this prompt is trying to force:
+There is no longer a separate late-denoise template with explicit Big Five language.
 
-- ambiguity rather than conclusion
-- variety rather than one polished theme
-- latent signal generation rather than biography writing
-- enough structure that later user curation can work on discrete fragments
+### 4. Final trajectory prompt
 
-### 2. Early denoise prompt
+The final prompt asks for:
+
+- 8-12 sentences
+- recognizable selected motifs
+- change through pressure rather than explanation
+- outer consequences plus inner reorganization
+- an ending that feels surprising in shape but inevitable in retrospect
+
+It also repeats the anti-echo rules:
+
+- selected fragments are the only valid surface motifs
+- profile is hidden causality only
+- do not restate the profile as prose
+
+### 5. Cleanup prompt
+
+After denoising, `generateCleanupPrompt(...)` runs one more model call:
 
 ```text
-You are a Life Trajectory Diffusion Model, denoising step ${step + 1} of ${totalSteps}.
-
-PERSON'S CURRENT STATE: ${state}
-GUIDANCE SCALE: ${guidance}/10
-
-PREVIOUS OUTPUT (step ${step}):
-${prev}
-
-STEP ${step + 1}: ADDING STRUCTURE (${Math.round(progress * 100)}% denoised)
-Add structure. Let causality emerge. Still rough but recognizable patterns. Add approximate timeframes. Personality traits shape HOW things happen. 5-6 sentences.
-
-Respond with ONLY the refined trajectory, nothing else.${langInstruction}
+Revise this trajectory so it no longer sounds like a paraphrase of a questionnaire.
 ```
 
-What this prompt is trying to force:
+Its rules are:
 
-- causality from the seed
-- a first coherent arc
-- rough chronology
-- personality as mechanism, not decoration
+- remove direct profile wording
+- replace abstract self-description with scenes, behaviors, consequences, and social facts
+- keep the meaning and structure
+- do not make the prose more generic
 
-### 3. Middle denoise prompt
+This is the last guard against profile echo.
 
-```text
-You are a Life Trajectory Diffusion Model, denoising step ${step + 1} of ${totalSteps}.
+## Runtime Flow
 
-PERSON'S CURRENT STATE: ${state}
-GUIDANCE SCALE: ${guidance}/10
-
-PREVIOUS OUTPUT (step ${step}):
-${prev}
-
-STEP ${step + 1}: SHARPENING (${Math.round(progress * 100)}% denoised)
-Add specificity — concrete decisions, turning points, key moments. Show cause and effect. At guidance ${guidance}/10: ${guidanceDesc}. 6-8 sentences with clear timeframes.
-
-Respond with ONLY the sharpened trajectory, nothing else.${langInstruction}
-```
-
-What this prompt is trying to force:
-
-- specificity rather than mood
-- visible decisions and turning points
-- stronger cause-effect links
-- explicit alignment with the requested ambition level
-
-### 4. Late denoise prompt
-
-```text
-You are a Life Trajectory Diffusion Model, denoising step ${step + 1} of ${totalSteps}.
-
-PERSON'S CURRENT STATE: ${state}
-GUIDANCE SCALE: ${guidance}/10
-
-PREVIOUS OUTPUT (step ${step}):
-${prev}
-
-STEP ${step + 1}: FINE DETAIL (${Math.round(progress * 100)}% denoised)
-Refine — emotional depth, internal transformations, precise moments. Make each transition feel inevitable. Personality colors every decision. 7-10 sentences.
-
-Respond with ONLY the refined trajectory, nothing else.${langInstruction}
-```
-
-What this prompt is trying to force:
-
-- inevitability
-- inner change, not just resume events
-- more emotionally grounded transitions
-- a stronger feeling that the person became this future through their own nature
-
-### 5. Final prompt
-
-```text
-You are a Life Trajectory Diffusion Model, final step ${step + 1} of ${totalSteps}.
-
-PERSON'S CURRENT STATE: ${state}
-GUIDANCE SCALE: ${guidance}/10
-
-PREVIOUS OUTPUT (step ${step}):
-${prev}
-
-STEP ${step + 1}: FULLY DENOISED — FINAL TRAJECTORY
-Vivid, coherent, compelling. Each moment connects with inevitability. Include:
-- Key turning points with approximate years
-- Internal shifts, not just external events
-- How their personality drove each pivot
-- What makes this ${guidanceDesc}
-- Where this person stands at the peak
-
-Flowing narrative, 8-12 sentences. Deeply personal — not generic.
-
-Respond with ONLY the final trajectory, nothing else.${langInstruction}
-```
-
-What this prompt is trying to force:
-
-- narrative closure
-- a final, publishable-feeling life arc
-- explicit turning points
-- an identifiable peak state
-- a complete synthesis of state, seed, personality, and guidance
-
-## How The Story Is Generated
-
-### Runtime flow
-
-The hook `useGeneration(...)` in `hooks/useGeneration.ts` owns the runtime state machine.
-
-The high-level flow is:
-
-1. `scanNoiseFragments()`
-2. build the `state` string from `Fields` + Big Five
-3. call `generateStepPrompt(0, ...)`
-4. send the request to `/api/generate`
-5. parse the numbered lines with `parseNoiseFragments(...)`
-6. convert them into `NoiseFragment[]`
-7. convert each fragment into a `Bullet`
-8. let the user catch or miss bullets
-9. serialize caught bullets into a seed string with `buildBulletSeed(...)`
-10. call `generate()` to run the rewrite loop
-11. keep only the last rewrite as the final trajectory
+The runtime state machine still lives in `useGeneration(...)` in `hooks/useGeneration.ts`.
 
 ### Scan phase
 
 `scanNoiseFragments()` does the following:
 
-- acquires a generation lock
-- clears previous bullets and outputs
-- builds the current `state`
-- sends the scan prompt with temperature `1.15`
-- parses the returned text into up to 10 fragments
-- assigns fragment ids starting from 1
-- converts each fragment into a `Bullet` with:
-  - `status: "flying"`
-  - `passCount: 0`
-  - `chamberIndex: null`
+1. Acquire the generation lock
+2. Build scan conditioning from `fields + big5`
+3. Clear prior bullets and prior trajectory outputs
+4. Build the scan prompt via `generateStepPrompt(0, ...)`
+5. Call `/api/generate` with temperature `1.15`
+6. Parse numbered fragments with `parseNoiseFragments(...)`
+7. Convert each fragment into a `Bullet`
+8. Enter `runPhase = "reviewing"`
 
-If parsing yields no usable fragments, the run is treated as an error.
+If parsing yields no fragments, the run errors.
 
-### Curation phase
+### Bullet curation phase
 
-`lib/revolver.ts` defines the selection mechanic.
+`lib/revolver.ts` still defines the bullet mechanic.
 
 Each `Bullet` can be:
 
@@ -510,133 +503,144 @@ Each `Bullet` can be:
 - `caught`
 - `spent`
 
-The rules are exact:
+The exact rules are unchanged:
 
-- the revolver has 6 chambers
-- a catch assigns the next chamber index in catch order
-- only `flying` or `ricocheting` bullets can be caught
-- once 6 bullets are caught, further catches are ignored
-- each uncaught bullet can be advanced up to 3 passes
-- on pass 3, the bullet becomes `spent`
+- the chamber cap is 6
+- catch order assigns `chamberIndex`
+- only `flying` and `ricocheting` bullets can be caught
+- uncaught bullets can advance up to 3 passes
+- pass 3 makes the bullet `spent`
 
-The ready-state logic lives partly in the hook:
+The hook still moves into `ready` when:
 
-- `runPhase` becomes `ready` when 6 bullets have been caught
-- it also becomes `ready` when all active bullets are gone but at least 1 bullet has been caught
+- 6 bullets are caught, or
+- all active bullets are gone and at least 1 bullet was caught
 
-This means the system does not require all 6 chambers to be full before denoising can begin. It only requires that there is at least one selected fragment and nothing left to curate, or that the chamber cap has been reached.
+### Post-curation gating
+
+There is now an extra UI gate in `app/page.tsx`.
+
+The fire button is disabled until both of these are true:
+
+- at least one bullet has been caught and the run is otherwise ready
+- both `curationAnswers.whyThese` and `curationAnswers.rejectedFuture` have been chosen
+
+So readiness now has two layers:
+
+- hook-level readiness based on bullet state
+- page-level readiness based on curation answers
+
+The curation question panel appears when:
+
+- `caughtCount > 0`, and
+- either `runPhase === "ready"` or there are no active bullets left
 
 ### Seed construction
 
-The app does not feed the raw scan output back into denoising. It feeds a chamber-ordered seed created by `buildBulletSeed(...)`.
+The denoise chain still does not consume the raw scan output directly.
 
-That seed is constructed as:
+It consumes `buildBulletSeed(bullets)`, which:
 
-1. create a 6-slot chamber snapshot
-2. place each caught bullet into its `chamberIndex`
-3. discard empty slots
-4. serialize remaining bullets as:
+1. Creates a 6-slot chamber snapshot
+2. Places caught bullets by `chamberIndex`
+3. Drops empty slots
+4. Serializes the result as:
 
 ```text
-1::first caught bullet text
-2::second caught bullet text
-3::third caught bullet text
+1::first caught bullet
+2::second caught bullet
 ...
 ```
 
-This matters because selection order becomes part of the latent structure. The denoise chain sees a short ordered seed, not an unordered basket of fragments.
+So the visible DNA of the story is still chamber-ordered bullet text.
 
 ### Denoise loop
 
-`generate()` performs a single linear refinement chain.
+`generate()` now does the following:
 
-The exact mechanics are:
+1. Refuse to run if locked
+2. Refuse to run if no bullets are caught
+3. Build full conditioning from `fields + big5 + curationAnswers`
+4. Build `mergedNoiseSeed` from caught bullets
+5. Initialize:
 
-- refuse to run if a generation lock already exists
-- refuse to run if zero bullets are `caught`
-- rebuild the same `state` string used in scan
-- build `mergedNoiseSeed` from the caught bullets
-- initialize `stepResults` as:
-
-```text
-[mergedNoiseSeed]
+```ts
+const stepResults = [mergedNoiseSeed];
 ```
 
-- for each `step` from `1` to `denoiseSteps - 1`
-  - build a prompt with `prev = stepResults[step - 1]`
-  - call the model with temperature `1.05`
-  - push the returned text into `stepResults`
+6. For each `step` from `1` to `denoiseSteps - 1`
+   - build prompt with `prev = stepResults[step - 1]`
+   - call the model with temperature `1.05`
+   - push the returned text into `stepResults`
+7. Run the cleanup prompt with temperature `0.8`
+8. Replace the final denoise output with the cleaned trajectory
+9. Store:
+   - cleaned trajectory in `trajectories`
+   - the full step list in `allStepOutputs`
 
-After the loop:
+So the canonical final story is:
 
-- the final trajectory is `stepResults[stepResults.length - 1]`
-- all intermediate outputs are retained in `allStepOutputs`
-- only the last output is treated as the canonical story
+- not the raw last denoise output
+- but the cleaned version returned by the anti-echo pass
 
-So the call pattern is exact:
+## Generate Page Summary
 
-- 1 scan call
-- `denoiseSteps - 1` refinement calls
+The generate screen in `app/page.tsx` no longer presents a "Your Profile" block that simply mirrors the questionnaire.
 
-And the evolving context is exact:
+It now shows `Story Conditions`:
 
-- each denoise step sees the previous output
-- there is no multi-branch search
-- there is no compare-and-select stage among alternative stories
+- hard-state chips such as age band, mobility, chapter, horizon
+- compressed anchors such as `anchorResource` and `anchorConstraint`
+- three text blocks:
+  - hidden pressure
+  - momentum pattern
+  - behavioral personality signature
 
-### API boundary and provider normalization
+This UI mirrors the underlying redesign: the system is now explicit about hidden causality rather than explicit about raw profile fields.
 
-The hook never talks to upstream providers directly. It always calls `/api/generate`.
+## API Boundary And Provider Normalization
 
-`app/api/generate/route.ts` adds:
+This layer is unchanged.
+
+`/api/generate` still handles:
 
 - per-IP throttling
 - global daily quota
 - JSON validation
-- normalized error handling
-- daily usage headers returned to the client
+- normalized error responses
+- daily usage headers
 
-`lib/providers.ts` then maps provider-specific request and response formats into one normalized text shape.
-
-Provider-specific differences handled here include:
-
-- Anthropic direct request format
-- OpenRouter chat completion format
-- xAI chat completion format
-- Gemini `generateContent` format
-
-The output is normalized into:
+`lib/providers.ts` still normalizes provider-specific response formats into:
 
 ```ts
 { content: [{ type: "text", text }] }
 ```
 
-That normalization is important because the client-side generation logic assumes one uniform text extraction path.
+So the client-side generation path still extracts text through one normalized shape regardless of provider.
 
 ## What The System Does Not Do
 
-The system is more constrained than the "diffusion" framing suggests.
-
-It does not:
+The system still does not:
 
 - run a true diffusion model
-- explore multiple branches and rank them
-- produce multiple candidate final stories and compare them
-- keep a long conversational memory between calls
-- use a persistent narrative planner or symbolic world model
-- ground the story in explicit current events or named headlines
-- retrieve external facts about the user
-- infer hidden data beyond the provided questionnaire state and the prompt's generic allowance for "broad contemporary pressures and opportunities"
+- branch and rank multiple candidate futures
+- compare alternative final trajectories
+- maintain a symbolic planner or world model
+- retrieve external user facts
+- ground output in named headlines or current events
+- treat the questionnaire as free-form autobiography
 
-The model is therefore doing a specific kind of work:
+What it does instead is narrower and more controlled:
 
-- scan for ambiguous future signals
-- accept human selection as latent guidance
-- rewrite one chain of text until it feels coherent
+- collect structured pressure signals
+- convert them into hidden story forces
+- let the user choose visible motifs
+- rewrite one linear story chain
+- clean up questionnaire-like prose at the end
 
 ## Worked Example Appendix
 
-This example is synthetic. It is not copied from a real session or model run. It is only meant to show how the logic composes.
+This example is synthetic. It only shows how the current code composes.
 
 ### Example answers
 
@@ -647,7 +651,7 @@ const answers: QuestionnaireAnswers = {
   currentMode: ["Early-career builder"],
   trajectoryFocus: ["Turning skill into real leverage"],
   skills: ["Tech & Engineering", "Writing & Media"],
-  resources: ["Steady income", "Low overhead, few obligations", "Open-source reputation"],
+  resources: ["Some savings", "Strong network", "Open-source reputation"],
   constraints: ["Fear of failure", "Too many options", "Algorithms decide who hears me"],
   obsessions: ["Building something real", "Financial freedom", "Independence"],
   workStyle: ["Quietly, through craft and depth"],
@@ -657,17 +661,7 @@ const answers: QuestionnaireAnswers = {
 };
 ```
 
-Why this example is valid:
-
-- `20–29` maps to `twenties`
-- `Early-career builder` unlocks a valid adult route tension set
-- `Turning skill into real leverage` is a valid `trajectoryFocus` under that route
-- `Tech & Engineering` adds `Open-source reputation` as a valid resource
-- `Writing & Media` adds `Algorithms decide who hears me` as a valid constraint
-- `Go all-in when conviction is high` plus `Quietly, through craft and depth` triggers the `bold-craft` inflection set
-- `A single piece of work gets noticed by the right person` is a valid `bold-craft` inflection option
-
-### Example Big Five and controls
+### Example personality and controls
 
 ```ts
 const big5 = [8, 6, 4, 5, 7];
@@ -677,82 +671,92 @@ const provider = "openrouter";
 const model = "anthropic/claude-sonnet-4.6";
 ```
 
-### Normalized `Fields` summary
+### Normalized `Fields`
 
-After `normalizeQuestionnaireAnswers(...)` and `buildFieldsFromAnswers(...)`, the flattened state is effectively:
+After `normalizeQuestionnaireAnswers(...)` and `buildFieldsFromAnswers(...)`:
 
 ```ts
 const fields: Fields = {
   age: "20–29",
   location: "Can relocate for the right upside",
-  skills: "Tech & Engineering, Writing & Media",
-  resources: "Steady income, Low overhead, few obligations, Open-source reputation",
-  constraints: "Fear of failure, Too many options, Algorithms decide who hears me",
-  obsessions: "Building something real, Financial freedom, Independence",
+  mobility: "Can relocate for the right upside",
   currentMode: "Early-career builder",
   trajectoryFocus: "Turning skill into real leverage",
+  skills: "Tech & Engineering, Writing & Media",
+  resources: "Some savings, Strong network, Open-source reputation",
+  constraints: "Fear of failure, Too many options, Algorithms decide who hears me",
+  obsessions: "Building something real, Financial freedom, Independence",
   workStyle: "Quietly, through craft and depth",
   riskTolerance: "Go all-in when conviction is high",
   timeHorizon: "Before I turn 30",
-  mobility: "Can relocate for the right upside",
   inflection: "A single piece of work gets noticed by the right person",
 };
 ```
 
-Notice that `location` is not independently collected. It is copied from `mobility`.
+### Example scan conditioning
 
-### Example state string
+The scan call uses:
 
-That becomes a prompt-visible state shaped like:
+```ts
+const scanConditioning = buildStoryConditioning(fields, big5);
+```
+
+That yields a prompt-visible structure shaped roughly like:
 
 ```text
-Age: 20–29
-Location: Can relocate for the right upside
-Mobility: Can relocate for the right upside
-Current chapter: Early-career builder
-Current route tension: Turning skill into real leverage
-Skills: Tech & Engineering, Writing & Media
-Resources & advantages: Steady income, Low overhead, few obligations, Open-source reputation
-Constraints: Fear of failure, Too many options, Algorithms decide who hears me
-Obsessions & drives: Building something real, Financial freedom, Independence
-Preferred way of winning: Quietly, through craft and depth
-Risk posture: Go all-in when conviction is high
-Time horizon: Before I turn 30
-Near-term inflection point: A single piece of work gets noticed by the right person
+BOUNDARY CONDITIONS:
+- Age band: 20–29
+- Mobility: Can relocate for the right upside
+- Current chapter: Early-career builder
+- Time horizon: Before I turn 30
+- Anchor resource: there is enough runway for compounding to matter
+- Primary constraint: proof still trails behind ability
+- Secondary constraint: too many live paths are thinning momentum
 
-Personality (Big Five):
-openness: high (8/10)
-conscientiousness: moderately high (6/10)
-extraversion: moderate (4/10)
-agreeableness: moderate (5/10)
-neuroticism: moderately high (7/10)
+LATENT FORCES:
+- Core tension: capability is arriving faster than public proof...
+- Momentum pattern: momentum begins in private until the work becomes harder to dismiss...
+- Exposure pattern: credibility grows artifact-first...
+- Risk pattern: once conviction crystallizes the commitment becomes total
+- Identity pressure: the future has to feel self-authored...
+- Likely transformation: a moment of visibility forces a larger identity to appear...
+
+PERSONALITY SIGNATURE:
+- Novelty appetite: moves toward novelty before full permission exists
+- Consistency pressure: likes structure, but not enough to become mechanical
+- Social propulsion: moves between solitude and contact without fully trusting either
+- Conflict tolerance: does not chase conflict, but will accept it when a path matters
+- Anticipatory sensitivity: feels the stakes vividly...
+- Combined reading: moves toward the unfamiliar quickly, then wrestles it into shape...
 ```
 
 ### Example scan result shape
 
-Suppose the scan call returns something like:
+Suppose the scan returns:
 
 ```text
-1::A codebase people quote by name
-2::A small apartment, two glowing monitors
-3::The first check that feels unreal
-4::Late-night drafts that quietly spread
+1::A product demo watched by the right stranger
+2::A codebase people quote by name
+3::Late-night drafts that quietly spread
+4::Freedom that costs more sleep than expected
 5::A train ticket bought before certainty
 6::Praise that arrives before self-belief
-7::A product demo watched by the right stranger
+7::A room that gets quieter when I begin
 8::Friends with stable jobs stop making sense
-9::A reputation built under pseudonyms first
-10::Freedom that costs more sleep than expected
+9::A version of me that can't stay hidden
+10::The first check that feels unreal
 ```
 
-These become:
+### Example bullet curation and post-curation answers
 
-- `NoiseFragment[]` after parsing
-- then `Bullet[]` after `fragmentToBullet(...)`
+Suppose the user catches bullets 1, 2, 3, and 4, then selects:
 
-### Example curation and seed
-
-Suppose the user catches bullets 7, 1, 4, and 10.
+```ts
+const curationAnswers: CurationAnswers = {
+  whyThese: "They feel dangerous but true",
+  rejectedFuture: "too safe",
+};
+```
 
 The chamber-ordered seed becomes:
 
@@ -763,32 +767,21 @@ The chamber-ordered seed becomes:
 4::Freedom that costs more sleep than expected
 ```
 
-That seed is the first element of `stepResults`.
+### Example denoise call pattern
 
-### Example denoise chain inputs
+With `denoiseSteps = 4`, the runtime makes:
 
-With `denoiseSteps = 4`, the runtime call pattern is:
+1. scan call
+2. denoise step 1
+3. denoise step 2
+4. denoise step 3
+5. cleanup call
 
-1. Scan call
-   - prompt: scan template
-   - inputs: `state`, `guidance = 8`, `prev = null`
+The denoise chain sees:
 
-2. Step 1 rewrite
-   - prompt: early denoise template
-   - inputs: same `state`, same `guidance`, `prev = mergedNoiseSeed`
+- visible motifs from the selected bullets
+- hidden causality from `StoryConditioning`
+- added selection tone from `whyThese`
+- negative shape from `rejectedFuture`
 
-3. Step 2 rewrite
-   - prompt: middle denoise template
-   - inputs: same `state`, same `guidance`, `prev = output from step 1`
-
-4. Step 3 rewrite
-   - prompt: final template
-   - inputs: same `state`, same `guidance`, `prev = output from step 2`
-
-The final story is therefore not generated in one jump. It is generated by progressively imposing:
-
-- structure
-- specificity
-- final coherence
-
-onto a seed chosen by the user from the original latent fragment set.
+The final canonical story is the cleaned output from step 5, not the raw output from step 4.
