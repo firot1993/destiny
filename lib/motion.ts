@@ -1,9 +1,13 @@
 export const motion = {
-  bulletDurationSec: 2.5,
-  ricochetDurationSec: 3.5,
-  bulletStaggerSec: 0.35,
-  bulletVerticalBobPx: 14,
-  bulletTiltMaxDeg: 5,
+  bulletDurationSec: 4.2,
+  ricochetDurationSec: 5.6,
+  bulletStaggerSec: 0.52,
+  bulletVerticalBobPx: 10,
+  bulletTiltMaxDeg: 4,
+  bulletHitPaddingX: 24,
+  bulletHitPaddingY: 12,
+  bulletLaneInsetPct: 14,
+  bulletLaneSpreadPct: 60,
 
   catchSpring: { stiffness: 280, damping: 24, mass: 0.9 },
   catchScalePulse: 1.22,
@@ -22,9 +26,9 @@ export const motion = {
 } as const;
 
 export const kineticType = {
-  bulletMinPx: 18,
-  bulletMaxPx: 30,
-  bulletWeight: 700,
+  bulletMinPx: 24,
+  bulletMaxPx: 40,
+  bulletWeight: 800,
   bulletLetterSpacing: "-0.01em",
   impactPx: 128,
   impactWeight: 900,

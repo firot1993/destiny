@@ -41,4 +41,32 @@ describe("BulletField", () => {
     await userEvent.click(screen.getByText("click-me"));
     expect(onCatch).toHaveBeenCalledWith(7);
   });
+
+  it("uses the provided font family for kinetic bullets", () => {
+    const bullets: Bullet[] = [
+      { id: 7, text: "font-check", status: "flying", passCount: 0, chamberIndex: null },
+    ];
+    render(
+      <BulletField
+        bullets={bullets}
+        onCatch={() => {}}
+        fontFamily="var(--serif-zh)"
+      />
+    );
+    expect(screen.getByText("font-check")).toHaveStyle({
+      fontFamily: "var(--serif-zh)",
+    });
+  });
+
+  it("renders bullets with an enlarged angled catch surface", () => {
+    const bullets: Bullet[] = [
+      { id: 9, text: "easy-catch", status: "flying", passCount: 0, chamberIndex: null },
+    ];
+    render(<BulletField bullets={bullets} onCatch={() => {}} />);
+    expect(screen.getByText("easy-catch")).toHaveStyle({
+      padding: "12px 24px",
+      clipPath: "polygon(6% 0, 100% 0, 94% 100%, 0 100%)",
+      touchAction: "manipulation",
+    });
+  });
 });

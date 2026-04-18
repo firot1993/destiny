@@ -8,6 +8,7 @@ interface BulletFieldProps {
   bullets: Bullet[];
   onCatch: (id: number) => void;
   onPassComplete?: (id: number) => void;
+  fontFamily?: string;
 }
 
 function hashBullet(id: number): { tilt: number; yPct: number; sizePx: number } {
@@ -17,14 +18,19 @@ function hashBullet(id: number): { tilt: number; yPct: number; sizePx: number } 
   const r3 = (((seed * 13) >>> 0) % 1000) / 1000;
   return {
     tilt: (r1 - 0.5) * 2 * motionTokens.bulletTiltMaxDeg,
-    yPct: 8 + r2 * 74,
+    yPct: motionTokens.bulletLaneInsetPct + r2 * motionTokens.bulletLaneSpreadPct,
     sizePx:
       kineticType.bulletMinPx +
       r3 * (kineticType.bulletMaxPx - kineticType.bulletMinPx),
   };
 }
 
-export function BulletField({ bullets, onCatch, onPassComplete }: BulletFieldProps) {
+export function BulletField({
+  bullets,
+  onCatch,
+  onPassComplete,
+  fontFamily = "var(--display)",
+}: BulletFieldProps) {
   const active = bullets.filter(
     (b) => b.status === "flying" || b.status === "ricocheting"
   );
@@ -76,23 +82,32 @@ export function BulletField({ bullets, onCatch, onPassComplete }: BulletFieldPro
                 delay: i * motionTokens.bulletStaggerSec,
               },
             }}
-            whileHover={{ scale: 1.08 }}
+            whileHover={{ scale: 1.12, y: -2 }}
+            whileTap={{ scale: 0.97 }}
             style={{
               position: "absolute",
               top: `${yPct}%`,
               left: 0,
-              padding: "4px 10px",
-              background: "transparent",
-              border: "none",
+              padding: `${motionTokens.bulletHitPaddingY}px ${motionTokens.bulletHitPaddingX}px`,
+              background:
+                "linear-gradient(135deg, rgba(255,250,240,0.96), rgba(255,250,240,0.78))",
+              border: `1px solid ${isRicochet ? theme.plumBorder18 : theme.inkBorder08}`,
+              borderRadius: 4,
               color: theme.ink8,
               fontSize: sizePx,
               fontWeight: kineticType.bulletWeight,
               letterSpacing: kineticType.bulletLetterSpacing,
-              fontFamily: "var(--font-serif, ui-serif, Georgia, serif)",
+              fontFamily,
               cursor: "pointer",
               whiteSpace: "nowrap",
               transform: `rotate(${tilt}deg)`,
-              textShadow: `2px 2px 0 ${theme.plumBg07}`,
+              textShadow: `2px 2px 0 ${theme.plum72}, 0 0 14px rgba(255,250,240,0.92)`,
+              WebkitTextStroke: "0.35px rgba(255,250,240,0.92)",
+              boxShadow:
+                "0 10px 24px rgba(0,0,0,0.08), inset 0 0 0 1px rgba(255,250,240,0.62)",
+              clipPath: "polygon(6% 0, 100% 0, 94% 100%, 0 100%)",
+              userSelect: "none",
+              touchAction: "manipulation",
             }}
           >
             {bullet.text}

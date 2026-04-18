@@ -7,9 +7,16 @@ import { theme } from "@/lib/theme";
 interface FireImpactProps {
   active: boolean;
   onComplete: () => void;
+  label?: string;
+  fontFamily?: string;
 }
 
-export function FireImpact({ active, onComplete }: FireImpactProps) {
+export function FireImpact({
+  active,
+  onComplete,
+  label = "FIRE",
+  fontFamily = "var(--display)",
+}: FireImpactProps) {
   useEffect(() => {
     if (!active) return;
     const t = window.setTimeout(onComplete, motionTokens.fireTotalMs);
@@ -99,7 +106,7 @@ export function FireImpact({ active, onComplete }: FireImpactProps) {
               fontWeight: kineticType.impactWeight,
               letterSpacing: kineticType.impactLetterSpacing,
               color: theme.ink8,
-              fontFamily: "var(--font-serif, ui-serif, Georgia, serif)",
+              fontFamily,
               transform: `rotate(${kineticType.impactTiltDeg}deg)`,
               textShadow: `6px 6px 0 ${theme.plum72}`,
               WebkitTextStroke: `2px ${theme.ink8}`,
@@ -108,7 +115,7 @@ export function FireImpact({ active, onComplete }: FireImpactProps) {
               userSelect: "none",
             }}
           >
-            FIRE
+            {label}
           </m.div>
         </m.div>
       )}

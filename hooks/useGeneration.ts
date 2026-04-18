@@ -151,6 +151,10 @@ export function useGeneration({
   const [dailyUsageDate, setDailyUsageDate] = useState(() => getUtcDateKey());
   const abortRef = useRef(false);
   const generationLockRef = useRef(false);
+  const caughtCount = bullets.filter((b) => b.status === "caught").length;
+  const activeBulletsCount = bullets.filter(
+    (b) => b.status === "flying" || b.status === "ricocheting"
+  ).length;
 
   useEffect(() => {
     const today = getUtcDateKey();
@@ -164,6 +168,24 @@ export function useGeneration({
       setDailyLimit(null);
     }
   }, []);
+
+  useEffect(() => {
+    if (runPhase !== "reviewing" && runPhase !== "ready") return;
+
+    if (
+      caughtCount >= REVOLVER_CHAMBERS ||
+      (caughtCount > 0 && activeBulletsCount === 0)
+    ) {
+      if (runPhase !== "ready") {
+        setRunPhase("ready");
+      }
+      return;
+    }
+
+    if (runPhase === "ready") {
+      setRunPhase("reviewing");
+    }
+  }, [activeBulletsCount, caughtCount, runPhase]);
 
   const callModel = async (
     messages: ReturnType<typeof generateStepPrompt>[],

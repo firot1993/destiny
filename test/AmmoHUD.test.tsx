@@ -31,6 +31,14 @@ describe("AmmoHUD", () => {
     expect(screen.getByText(/LOADED · 2 \/ 6/)).toBeInTheDocument();
   });
 
+  it("uses the provided loaded label", () => {
+    const bullets: Bullet[] = [
+      { id: 1, text: "a", status: "caught", passCount: 0, chamberIndex: 0 },
+    ];
+    render(<AmmoHUD bullets={bullets} loadedLabel="已装填" />);
+    expect(screen.getByText(/\[ 已装填 · 1 \/ 6 \]/)).toBeInTheDocument();
+  });
+
   it("marks only caught chambers as loaded", () => {
     const bullets: Bullet[] = [
       { id: 1, text: "a", status: "caught", passCount: 0, chamberIndex: 0 },

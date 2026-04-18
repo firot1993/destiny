@@ -37,4 +37,15 @@ describe("FireImpact", () => {
     expect(onComplete).toHaveBeenCalledTimes(1);
     vi.useRealTimers();
   });
+
+  it("uses the provided impact label", () => {
+    render(
+      <FireImpact
+        active={true}
+        onComplete={() => {}}
+        label="开火"
+      />
+    );
+    expect(screen.getByText("开火")).toBeInTheDocument();
+  });
 });

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "HTTP_PROXY=$(scutil --proxy 2>/dev/null | awk '/HTTPEnable/{e=$3} /HTTPProxy /{h=$3} /HTTPPort /{p=$3} END{if(e==1) printf \"http://\" h \":\" p}') HTTPS_PROXY=$(scutil --proxy 2>/dev/null | awk '/HTTPSEnable/{e=$3} /HTTPSProxy /{h=$3} /HTTPSPort /{p=$3} END{if(e==1) printf \"http://\" h \":\" p}') next dev",
+    "dev": "NODE_USE_ENV_PROXY=1 HTTP_PROXY=${HTTP_PROXY:-$http_proxy} HTTPS_PROXY=${HTTPS_PROXY:-$https_proxy} ALL_PROXY=${ALL_PROXY:-$all_proxy} next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",

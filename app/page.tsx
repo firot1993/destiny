@@ -156,11 +156,18 @@ export default function Home() {
   }, [gen]);
 
   const caughtCount = gen.bullets.filter((b) => b.status === "caught").length;
+  const activeBulletsCount = gen.bullets.filter(
+    (b) => b.status === "flying" || b.status === "ricocheting"
+  ).length;
 
   const guidanceLabels = useMemo(() => [
     "",
     ...Array.from({ length: 10 }, (_, i) => t(`guidance_${i + 1}`)),
   ], [t]);
+  const kineticFontFamily =
+    lang === "zh"
+      ? "var(--serif-zh)"
+      : "var(--display)";
 
   return (
     <div data-lang={lang} className="page-shell">
@@ -519,16 +526,78 @@ export default function Home() {
 
             {(gen.runPhase === "reviewing" || gen.runPhase === "ready") && (
               <div style={{ position: "relative", marginBottom: 24 }}>
-                <AmmoHUD bullets={gen.bullets} />
+                <AmmoHUD
+                  bullets={gen.bullets}
+                  loadedLabel={t("ammo_loaded_label")}
+                />
                 <BulletField
                   bullets={gen.bullets}
                   onCatch={gen.catchBullet}
                   onPassComplete={handlePassComplete}
+                  fontFamily={kineticFontFamily}
                 />
+                {activeBulletsCount === 0 && !gen.isGenerating && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      padding: 24,
+                      pointerEvents: "none",
+                    }}
+                  >
+                    <div
+                      style={{
+                        maxWidth: 420,
+                        padding: "16px 18px",
+                        background: "rgba(255,250,240,0.92)",
+                        border: `1px solid ${theme.inkBorder08}`,
+                        borderRadius: 8,
+                        boxShadow: "0 12px 32px rgba(0,0,0,0.08)",
+                        textAlign: "center",
+                      }}
+                    >
+                      <div
+                        style={{
+                          ...mono,
+                          fontSize: 10,
+                          fontWeight: 700,
+                          letterSpacing: 0.9,
+                          color: theme.moss78,
+                          marginBottom: 8,
+                        }}
+                      >
+                        {caughtCount > 0
+                          ? t("bullet_round_ready_title")
+                          : t("bullet_round_empty_title")}
+                      </div>
+                      <p
+                        className="serif"
+                        style={{
+                          margin: 0,
+                          fontSize: 15,
+                          lineHeight: 1.65,
+                          color: theme.ink75,
+                        }}
+                      >
+                        {caughtCount > 0
+                          ? t("bullet_round_ready_body")
+                          : t("bullet_round_empty_body")}
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
-            <FireImpact active={fireImpactActive} onComplete={handleFireImpactComplete} />
+            <FireImpact
+              active={fireImpactActive}
+              onComplete={handleFireImpactComplete}
+              label={t("bullet_fire")}
+              fontFamily={kineticFontFamily}
+            />
 
             {gen.bullets.length === 0 && !gen.isGenerating && (
               <button
@@ -538,22 +607,6 @@ export default function Home() {
                 <span className="icon-text">
                   <Play size={13} strokeWidth={2} aria-hidden="true" />
                   {t("btn_scan_noise")}
-                </span>
-              </button>
-            )}
-
-            {gen.runPhase === "reviewing" && (
-              <button
-                onClick={gen.reloadScan}
-                disabled={gen.isGenerating}
-                style={{
-                  ...buttonStyles.secondary,
-                  opacity: gen.isGenerating ? 0.5 : 1,
-                }}
-              >
-                <span className="icon-text">
-                  <RefreshCw size={13} strokeWidth={1.9} aria-hidden="true" />
-                  [ {t("bullet_reload")} ]
                 </span>
               </button>
             )}
@@ -570,6 +623,22 @@ export default function Home() {
                 <span className="icon-text">
                   <Play size={13} strokeWidth={2} aria-hidden="true" />
                   [ {t("bullet_fire")} ]
+                </span>
+              </button>
+            )}
+
+            {(gen.runPhase === "reviewing" || gen.runPhase === "ready") && (
+              <button
+                onClick={gen.reloadScan}
+                disabled={gen.isGenerating}
+                style={{
+                  ...buttonStyles.secondary,
+                  opacity: gen.isGenerating ? 0.5 : 1,
+                }}
+              >
+                <span className="icon-text">
+                  <RefreshCw size={13} strokeWidth={1.9} aria-hidden="true" />
+                  [ {t("bullet_reload")} ]
                 </span>
               </button>
             )}

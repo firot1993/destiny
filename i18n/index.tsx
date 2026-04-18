@@ -112,6 +112,10 @@ const translations: Record<string, Record<string, string>> = {
     bullet_fire: "FIRE",
     ammo_loaded_label: "LOADED",
     curate_stage_hint: "Catch the bullets. Load six. Fire.",
+    bullet_round_empty_title: "ROUND EMPTY",
+    bullet_round_empty_body: "Everything slipped past. Reload for a fresh scan.",
+    bullet_round_ready_title: "CHAMBER LIVE",
+    bullet_round_ready_body: "You can fire what you caught, or reload for another pass.",
   },
 
   zh: {
@@ -207,6 +211,10 @@ const translations: Record<string, Record<string, string>> = {
     bullet_fire: "开火",
     ammo_loaded_label: "已装填",
     curate_stage_hint: "抓住子弹。装满六发。开火。",
+    bullet_round_empty_title: "本轮落空",
+    bullet_round_empty_body: "这一轮都溜走了。重新装填，再扫一轮。",
+    bullet_round_ready_title: "弹仓仍可开火",
+    bullet_round_ready_body: "你可以用已捕获的内容直接开火，或重新装填再来一轮。",
   },
 };
 

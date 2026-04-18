@@ -99,4 +99,37 @@ describe("useGeneration bullet lifecycle", () => {
     });
     expect(result.current.runPhase).toBe("ready");
   });
+
+  it("transitions to ready when all remaining bullets are gone but some are caught", async () => {
+    mockFetch.mockResolvedValueOnce(
+      makeMockResponse({
+        content: [{ type: "text", text: "1:: a\n2:: b" }],
+      })
+    );
+    const { result } = renderHook(() =>
+      useGeneration({
+        fields: {} as any,
+        big5: [5, 5, 5, 5, 5],
+        guidance: 7,
+        denoiseSteps: 4,
+        provider: "openrouter",
+        model: "test",
+        lang: "en",
+        t: (k: string) => k,
+      })
+    );
+
+    await act(async () => {
+      await result.current.scanNoiseFragments();
+    });
+
+    act(() => {
+      result.current.catchBullet(1);
+      result.current.ricochetSingle(2);
+      result.current.ricochetSingle(2);
+      result.current.ricochetSingle(2);
+    });
+
+    expect(result.current.runPhase).toBe("ready");
+  });
 });

@@ -9,9 +9,13 @@ import { REVOLVER_CHAMBERS } from "@/types";
 
 interface AmmoHUDProps {
   bullets: Bullet[];
+  loadedLabel?: string;
 }
 
-export function AmmoHUD({ bullets }: AmmoHUDProps) {
+export function AmmoHUD({
+  bullets,
+  loadedLabel = "LOADED",
+}: AmmoHUDProps) {
   const chambers = chamberSnapshot(bullets);
   const caughtCount = chambers.filter(Boolean).length;
 
@@ -41,7 +45,7 @@ export function AmmoHUD({ bullets }: AmmoHUDProps) {
           fontWeight: 700,
         }}
       >
-        [ LOADED · {caughtCount} / {REVOLVER_CHAMBERS} ]
+        [ {loadedLabel} · {caughtCount} / {REVOLVER_CHAMBERS} ]
       </div>
       <div style={{ display: "flex", gap: 6 }}>
         {chambers.map((bullet, i) => {
