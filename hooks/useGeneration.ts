@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type {
+  CurationAnswers,
   Fields,
   NoiseFragment,
   Bullet,
@@ -16,8 +17,9 @@ import {
   buildBulletSeed,
 } from "@/lib/revolver";
 import {
-  buildStateString,
+  buildStoryConditioning,
   generateStepPrompt,
+  generateCleanupPrompt,
   extractNormalizedText,
   parseNoiseFragments,
 } from "@/lib/prompts";
@@ -101,6 +103,7 @@ function resolveDailyUsage(opts: {
 export interface UseGenerationParams {
   fields: Fields;
   big5: number[];
+  curationAnswers?: Partial<CurationAnswers>;
   guidance: number;
   denoiseSteps: number;
   provider: string;
@@ -133,6 +136,7 @@ export interface UseGenerationReturn {
 export function useGeneration({
   fields,
   big5,
+  curationAnswers,
   guidance,
   denoiseSteps,
   provider,
@@ -268,7 +272,7 @@ export function useGeneration({
     if (generationLockRef.current) return;
     generationLockRef.current = true;
 
-    const stateStr = buildStateString(fields, big5);
+    const conditioning = buildStoryConditioning(fields, big5);
     setIsGenerating(true);
     setRunPhase("scanning");
     setBullets([]);
@@ -278,7 +282,14 @@ export function useGeneration({
     setCurrentStep(0);
 
     try {
-      const msg = generateStepPrompt(0, denoiseSteps, stateStr, guidance, null, lang);
+      const msg = generateStepPrompt(
+        0,
+        denoiseSteps,
+        conditioning,
+        guidance,
+        null,
+        lang
+      );
       const rawNoise = await callModel([msg], 1.15);
 
       if (abortRef.current) {
@@ -340,7 +351,7 @@ export function useGeneration({
     if (generationLockRef.current || bullets.filter((b) => b.status === "caught").length === 0) return;
     generationLockRef.current = true;
 
-    const stateStr = buildStateString(fields, big5);
+    const conditioning = buildStoryConditioning(fields, big5, curationAnswers);
     const mergedNoiseSeed = buildBulletSeed(bullets);
 
     setIsGenerating(true);
@@ -358,7 +369,7 @@ export function useGeneration({
         const msg = generateStepPrompt(
           step,
           denoiseSteps,
-          stateStr,
+          conditioning,
           guidance,
           stepResults[step - 1],
           lang
@@ -368,7 +379,13 @@ export function useGeneration({
       }
 
       if (!abortRef.current && stepResults.length > 0) {
-        setTrajectories([stepResults[stepResults.length - 1]]);
+        const cleanupPrompt = generateCleanupPrompt(
+          stepResults[stepResults.length - 1],
+          lang
+        );
+        const cleanedTrajectory = await callModel([cleanupPrompt], 0.8);
+        stepResults[stepResults.length - 1] = cleanedTrajectory;
+        setTrajectories([cleanedTrajectory]);
         setAllStepOutputs([stepResults]);
       }
 

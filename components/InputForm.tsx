@@ -19,18 +19,21 @@ interface InputFormProps {
 
 const inactiveButtonStyle: React.CSSProperties = {
   width: "100%",
-  padding: "20px 52px 20px 22px",
+  padding: "22px 56px 22px 22px",
   textAlign: "left",
   borderRadius: 8,
   border: `1px solid ${theme.inkBorder16}`,
   background: "rgba(255,253,246,0.9)",
   color: theme.ink85,
-  fontSize: 18,
-  fontWeight: 600,
+  fontSize: 17,
+  fontWeight: 500,
   cursor: "pointer",
   position: "relative",
   minHeight: 78,
-  lineHeight: 1.38,
+  lineHeight: 1.42,
+  whiteSpace: "normal",
+  wordBreak: "normal",
+  overflowWrap: "break-word",
 };
 
 const activeButtonStyle: React.CSSProperties = {
@@ -137,23 +140,28 @@ export function InputForm({ answers, onAnswersChange, onNext }: InputFormProps) 
   return (
     <div style={{ animation: "fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) both" }}>
       <div style={{ display: "flex", gap: 6, marginBottom: 18, justifyContent: "center" }}>
-        {Array.from({ length: questions.length }).map((_, index) => (
-          <div
-            key={index}
-            style={{
-              height: 4,
-              borderRadius: 999,
-              width: index === step ? 24 : 6,
-              background:
-                index === step
-                  ? theme.moss
-                  : index < step
-                  ? theme.mossBorder24
-                  : theme.inkBorder12,
-              transition: "all 0.3s ease",
-            }}
-          />
-        ))}
+        {questions.map((q, index) => {
+          const prevChapter = index > 0 ? questions[index - 1].chapter : undefined;
+          const chapterChanged = q.chapter && prevChapter && q.chapter !== prevChapter;
+          return (
+            <div
+              key={`${q.id}-${index}`}
+              style={{
+                height: 4,
+                borderRadius: 999,
+                width: index === step ? 24 : 6,
+                marginLeft: chapterChanged ? 10 : 0,
+                background:
+                  index === step
+                    ? theme.moss
+                    : index < step
+                    ? theme.mossBorder24
+                    : theme.inkBorder12,
+                transition: "all 0.3s ease",
+              }}
+            />
+          );
+        })}
       </div>
 
       <div
@@ -174,6 +182,63 @@ export function InputForm({ answers, onAnswersChange, onNext }: InputFormProps) 
         key={`${current.id}-${step}`}
         style={{ animation: "slideInRight 0.35s cubic-bezier(0.16, 1, 0.3, 1) both" }}
       >
+        {current.chapterTitle && (
+          <div
+            style={{
+              marginBottom: 20,
+              textAlign: "center",
+              animation: "fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) both",
+            }}
+          >
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 10,
+                fontSize: 10,
+                letterSpacing: 2.4,
+                textTransform: "uppercase",
+                ...mono,
+                color: theme.moss78,
+                fontWeight: 700,
+              }}
+            >
+              <span
+                aria-hidden="true"
+                style={{
+                  display: "inline-block",
+                  width: 24,
+                  height: 1,
+                  background: theme.mossBorder38,
+                }}
+              />
+              {copyForLang(current.chapterTitle, lang)}
+              <span
+                aria-hidden="true"
+                style={{
+                  display: "inline-block",
+                  width: 24,
+                  height: 1,
+                  background: theme.mossBorder38,
+                }}
+              />
+            </div>
+            {current.chapterSubtitle && (
+              <div
+                className="serif"
+                style={{
+                  marginTop: 8,
+                  fontSize: 14,
+                  fontStyle: "italic",
+                  color: theme.ink65,
+                  lineHeight: 1.5,
+                }}
+              >
+                {copyForLang(current.chapterSubtitle, lang)}
+              </div>
+            )}
+          </div>
+        )}
         {routeLabel && (
           <div
             style={{
@@ -243,7 +308,9 @@ export function InputForm({ answers, onAnswersChange, onNext }: InputFormProps) 
           style={{
             display: "grid",
             gap: 12,
-            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+            gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+            maxWidth: 720,
+            margin: "0 auto",
           }}
         >
           {current.options.map((option) => {

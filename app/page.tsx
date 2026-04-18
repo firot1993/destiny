@@ -20,10 +20,11 @@ import { BulletField } from "@/components/BulletField";
 import { AmmoHUD } from "@/components/AmmoHUD";
 import { FireImpact } from "@/components/FireImpact";
 import { buildFieldsFromAnswers } from "@/lib/questionnaire";
+import { buildStoryConditioning } from "@/lib/prompts";
 import { PROVIDERS, DEFAULT_PROVIDER } from "@/lib/constants";
 import { theme, mono, labelStyles } from "@/lib/theme";
 import { previewBullets } from "@/lib/devPreview";
-import type { QuestionnaireAnswers } from "@/types";
+import type { CurationAnswers, QuestionnaireAnswers } from "@/types";
 
 const IS_DEV = process.env.NODE_ENV === "development";
 
@@ -53,6 +54,36 @@ const profileAccentChipStyle: React.CSSProperties = {
   ...profileChipStyle,
   border: `1px solid ${theme.mossBorder16}`,
   background: theme.mossBg06,
+  color: theme.moss78,
+};
+
+const profileTextBlockStyle: React.CSSProperties = {
+  padding: "12px 14px",
+  borderRadius: 8,
+  background: "rgba(255,250,240,0.48)",
+  border: `1px solid ${theme.inkBorder07}`,
+  fontSize: 14,
+  lineHeight: 1.6,
+  color: theme.ink72,
+};
+
+const curationChoiceStyle: React.CSSProperties = {
+  width: "100%",
+  padding: "12px 14px",
+  textAlign: "left",
+  borderRadius: 8,
+  border: `1px solid ${theme.inkBorder08}`,
+  background: "rgba(255,250,240,0.44)",
+  color: theme.ink72,
+  cursor: "pointer",
+  fontSize: 14,
+  lineHeight: 1.5,
+};
+
+const curationChoiceActiveStyle: React.CSSProperties = {
+  ...curationChoiceStyle,
+  border: `1px solid ${theme.mossBorder24}`,
+  background: theme.mossBg09,
   color: theme.moss78,
 };
 
@@ -116,6 +147,88 @@ const buttonStyles = {
   } as React.CSSProperties,
 };
 
+interface LocalizedChoice {
+  value: string;
+  label: {
+    en: string;
+    zh: string;
+  };
+}
+
+const EMPTY_CURATION_ANSWERS: CurationAnswers = {
+  whyThese: "",
+  rejectedFuture: "",
+};
+
+const WHY_THESE_OPTIONS: LocalizedChoice[] = [
+  {
+    value: "They feel like my best life",
+    label: {
+      en: "They feel like my best life",
+      zh: "它们像是我最想活出来的那种人生",
+    },
+  },
+  {
+    value: "They feel dangerous but true",
+    label: {
+      en: "They feel dangerous but true",
+      zh: "它们危险，但是真的",
+    },
+  },
+  {
+    value: "They feel embarrassing to want",
+    label: {
+      en: "They feel embarrassing to want",
+      zh: "它们是那种说出口会有点羞耻的想要",
+    },
+  },
+  {
+    value: "They feel more real than the rest",
+    label: {
+      en: "They feel more real than the rest",
+      zh: "比起其他选项，它们更像真的",
+    },
+  },
+  {
+    value: "I don't know why, but they stick",
+    label: {
+      en: "I don't know why, but they stick",
+      zh: "我也说不清为什么，但它们一直黏在我脑子里",
+    },
+  },
+];
+
+const REJECTED_FUTURE_OPTIONS: LocalizedChoice[] = [
+  {
+    value: "too safe",
+    label: { en: "too safe", zh: "太安全" },
+  },
+  {
+    value: "too performative",
+    label: { en: "too performative", zh: "太表演" },
+  },
+  {
+    value: "too lonely",
+    label: { en: "too lonely", zh: "太孤独" },
+  },
+  {
+    value: "too chaotic",
+    label: { en: "too chaotic", zh: "太混乱" },
+  },
+  {
+    value: "too ordinary",
+    label: { en: "too ordinary", zh: "太普通" },
+  },
+  {
+    value: "too borrowed from other people",
+    label: { en: "too borrowed from other people", zh: "太像借来的别人剧本" },
+  },
+];
+
+function choiceLabel(choice: LocalizedChoice, lang: "en" | "zh"): string {
+  return choice.label[lang] ?? choice.label.en;
+}
+
 export default function Home() {
   const { t, lang, toggleLang } = useI18n();
 
@@ -123,6 +236,8 @@ export default function Home() {
   const [showSettings, setShowSettings] = useState(false);
   const [questionnaireAnswers, setQuestionnaireAnswers] =
     useState<QuestionnaireAnswers>({});
+  const [curationAnswers, setCurationAnswers] =
+    useState<CurationAnswers>(EMPTY_CURATION_ANSWERS);
   const [big5, setBig5] = useState([5, 5, 5, 5, 5]);
   const [guidance, setGuidance] = useState(7);
   const [denoiseSteps, setDenoiseSteps] = useState(4);
@@ -130,6 +245,10 @@ export default function Home() {
   const [model, setModel] = useState(PROVIDERS[DEFAULT_PROVIDER][0]);
   const [fireImpactActive, setFireImpactActive] = useState(false);
   const fields = useMemo(() => buildFieldsFromAnswers(questionnaireAnswers), [questionnaireAnswers]);
+  const conditioning = useMemo(
+    () => buildStoryConditioning(fields, big5, curationAnswers),
+    [fields, big5, curationAnswers]
+  );
 
   const updateBig5 = (idx: number, val: number) =>
     setBig5((b) => { const n = [...b]; n[idx] = val; return n; });
@@ -137,6 +256,7 @@ export default function Home() {
   const gen = useGeneration({
     fields,
     big5,
+    curationAnswers,
     guidance,
     denoiseSteps,
     provider,
@@ -158,10 +278,29 @@ export default function Home() {
     gen.ricochetSingle(bulletId);
   }, [gen]);
 
+  const resetCuration = useCallback(() => {
+    setCurationAnswers(EMPTY_CURATION_ANSWERS);
+  }, []);
+
+  const handleScan = useCallback(() => {
+    resetCuration();
+    return gen.scanNoiseFragments();
+  }, [gen, resetCuration]);
+
+  const handleReload = useCallback(() => {
+    resetCuration();
+    return gen.reloadScan();
+  }, [gen, resetCuration]);
+
   const caughtCount = gen.bullets.filter((b) => b.status === "caught").length;
   const activeBulletsCount = gen.bullets.filter(
     (b) => b.status === "flying" || b.status === "ricocheting"
   ).length;
+  const showCurationQuestions =
+    caughtCount > 0 && (gen.runPhase === "ready" || activeBulletsCount === 0);
+  const curationReady =
+    curationAnswers.whyThese.length > 0 &&
+    curationAnswers.rejectedFuture.length > 0;
 
   const guidanceLabels = useMemo(() => [
     "",
@@ -358,39 +497,34 @@ export default function Home() {
                 {t("encoded_state")}
               </div>
               <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                {fields.age && (
+                {conditioning.hardState.ageBand && (
                   <span style={profileChipStyle}>
-                    Age {fields.age}
+                    {conditioning.hardState.ageBand}
                   </span>
                 )}
-                {fields.location && (
+                {conditioning.hardState.mobility && (
                   <span style={profileChipStyle}>
-                    {fields.location}
+                    {conditioning.hardState.mobility}
                   </span>
                 )}
-                {fields.currentMode && (
+                {conditioning.hardState.chapter && (
                   <span style={profileChipStyle}>
-                    {fields.currentMode}
+                    {conditioning.hardState.chapter}
                   </span>
                 )}
-                {fields.trajectoryFocus && (
+                {conditioning.hardState.horizon && (
+                  <span style={profileChipStyle}>
+                    {conditioning.hardState.horizon}
+                  </span>
+                )}
+                {conditioning.hardState.anchorResource && (
                   <span style={profileAccentChipStyle}>
-                    {fields.trajectoryFocus}
+                    {conditioning.hardState.anchorResource}
                   </span>
                 )}
-                {fields.workStyle && (
-                  <span style={profileChipStyle}>
-                    {fields.workStyle}
-                  </span>
-                )}
-                {fields.riskTolerance && (
-                  <span style={profileChipStyle}>
-                    {fields.riskTolerance}
-                  </span>
-                )}
-                {fields.timeHorizon && (
-                  <span style={profileChipStyle}>
-                    {fields.timeHorizon}
+                {conditioning.hardState.anchorConstraint && (
+                  <span style={profileAccentChipStyle}>
+                    {conditioning.hardState.anchorConstraint}
                   </span>
                 )}
                 <span style={profileChipStyle}>
@@ -402,6 +536,26 @@ export default function Home() {
                 <span style={profileChipStyle}>
                   {model}
                 </span>
+              </div>
+              <div
+                style={{
+                  display: "grid",
+                  gap: 10,
+                  marginTop: 16,
+                }}
+              >
+                <div style={profileTextBlockStyle}>
+                  <strong>{t("hidden_pressure_label")}:</strong>{" "}
+                  {conditioning.latentForces.coreTension}
+                </div>
+                <div style={profileTextBlockStyle}>
+                  <strong>{t("momentum_pattern_label")}:</strong>{" "}
+                  {conditioning.latentForces.momentumPattern}
+                </div>
+                <div style={profileTextBlockStyle}>
+                  <strong>{t("personality_signature_label")}:</strong>{" "}
+                  {conditioning.personalitySignature.combinedReading}
+                </div>
               </div>
             </div>
 
@@ -595,6 +749,96 @@ export default function Home() {
               </div>
             )}
 
+            {showCurationQuestions && (
+              <div
+                style={{
+                  marginBottom: 24,
+                  padding: "18px 22px",
+                  background: "rgba(255,250,240,0.54)",
+                  border: `1px solid ${theme.mossBorder16}`,
+                  borderRadius: 8,
+                }}
+              >
+                <div style={sectionLabelStyle}>{t("curation_title")}</div>
+                <p
+                  className="serif"
+                  style={{
+                    margin: "0 0 18px",
+                    fontSize: 15,
+                    lineHeight: 1.7,
+                    color: theme.ink72,
+                  }}
+                >
+                  {t("curation_hint")}
+                </p>
+
+                <div style={{ display: "grid", gap: 20 }}>
+                  <div>
+                    <label style={{ ...labelStyle, marginBottom: 12 }}>
+                      {t("curation_why_title")}
+                    </label>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                        gap: 10,
+                      }}
+                    >
+                      {WHY_THESE_OPTIONS.map((option) => {
+                        const active = curationAnswers.whyThese === option.value;
+                        return (
+                          <button
+                            key={option.value}
+                            onClick={() =>
+                              setCurationAnswers((prev) => ({
+                                ...prev,
+                                whyThese: option.value,
+                              }))
+                            }
+                            style={active ? curationChoiceActiveStyle : curationChoiceStyle}
+                          >
+                            {choiceLabel(option, lang)}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={{ ...labelStyle, marginBottom: 12 }}>
+                      {t("curation_reject_title")}
+                    </label>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                        gap: 10,
+                      }}
+                    >
+                      {REJECTED_FUTURE_OPTIONS.map((option) => {
+                        const active =
+                          curationAnswers.rejectedFuture === option.value;
+                        return (
+                          <button
+                            key={option.value}
+                            onClick={() =>
+                              setCurationAnswers((prev) => ({
+                                ...prev,
+                                rejectedFuture: option.value,
+                              }))
+                            }
+                            style={active ? curationChoiceActiveStyle : curationChoiceStyle}
+                          >
+                            {choiceLabel(option, lang)}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <FireImpact
               active={fireImpactActive}
               onComplete={handleFireImpactComplete}
@@ -604,7 +848,7 @@ export default function Home() {
 
             {gen.bullets.length === 0 && !gen.isGenerating && (
               <button
-                onClick={gen.scanNoiseFragments}
+                onClick={handleScan}
                 style={buttonStyles.primary}
               >
                 <span className="icon-text">
@@ -630,24 +874,43 @@ export default function Home() {
             )}
 
             {gen.runPhase === "ready" && (
-              <button
-                onClick={handleFire}
-                disabled={gen.isGenerating || fireImpactActive}
-                style={{
-                  ...buttonStyles.fire,
-                  opacity: gen.isGenerating || fireImpactActive ? 0.5 : 1,
-                }}
-              >
-                <span className="icon-text">
-                  <Play size={13} strokeWidth={2} aria-hidden="true" />
-                  [ {t("bullet_fire")} ]
-                </span>
-              </button>
+              <>
+                {!curationReady && (
+                  <div
+                    style={{
+                      marginTop: 10,
+                      marginBottom: 10,
+                      fontSize: 11,
+                      ...mono,
+                      color: theme.red85,
+                      textAlign: "center",
+                    }}
+                  >
+                    {t("curation_needed")}
+                  </div>
+                )}
+                <button
+                  onClick={handleFire}
+                  disabled={gen.isGenerating || fireImpactActive || !curationReady}
+                  style={{
+                    ...buttonStyles.fire,
+                    opacity:
+                      gen.isGenerating || fireImpactActive || !curationReady
+                        ? 0.5
+                        : 1,
+                  }}
+                >
+                  <span className="icon-text">
+                    <Play size={13} strokeWidth={2} aria-hidden="true" />
+                    [ {t("bullet_fire")} ]
+                  </span>
+                </button>
+              </>
             )}
 
             {(gen.runPhase === "reviewing" || gen.runPhase === "ready") && (
               <button
-                onClick={gen.reloadScan}
+                onClick={handleReload}
                 disabled={gen.isGenerating}
                 style={{
                   ...buttonStyles.secondary,
