@@ -4,18 +4,25 @@ import { buildStoryConditioning, generateStepPrompt } from "@/lib/prompts";
 
 const sampleFields: Fields = {
   age: "20–29",
-  location: "Can relocate for the right upside",
   mobility: "Can relocate for the right upside",
   currentMode: "Early-career builder",
   trajectoryFocus: "Turning skill into real leverage",
-  skills: "Tech & Engineering, Writing & Media",
-  resources: "Some savings, Open-source reputation",
-  constraints: "Lack of experience, Too many options",
-  obsessions: "Freedom, mastery",
-  workStyle: "Quietly, through craft and depth",
-  riskTolerance: "Go all-in when conviction is high",
-  timeHorizon: "Next 3 years",
-  inflection: "A single piece of work gets noticed by the right person",
+  hiddenEdge: "Runway that buys patience, Taste that arrives before status",
+  recurringTrap: "Waiting for certainty that never arrives",
+  costWillingness: "Visibility before I feel ready",
+  magneticScene: "A small room where one thing gets better every week",
+  socialMirror: "That the quiet period was not stagnation",
+  obsessions: "Leverage that keeps paying after the effort ends",
+  delayFailureMode: "Waiting for certainty that never arrives",
+  inflection: "A stranger bets on me before the proof is in",
+  // Legacy aliases (mirror new fields for back-compat with older inference arms):
+  location: "Can relocate for the right upside",
+  skills: "",
+  resources: "Runway that buys patience, Taste that arrives before status",
+  constraints: "Waiting for certainty that never arrives",
+  workStyle: "A small room where one thing gets better every week",
+  riskTolerance: "Visibility before I feel ready",
+  timeHorizon: "That the quiet period was not stagnation",
 };
 
 describe("prompt conditioning", () => {
@@ -29,7 +36,7 @@ describe("prompt conditioning", () => {
       expect.objectContaining({
         ageBand: "20–29",
         chapter: "Early-career builder",
-        horizon: "Next 3 years",
+        horizon: expect.any(String),
         anchorResource: expect.any(String),
         anchorConstraint: expect.any(String),
       })

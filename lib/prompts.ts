@@ -34,6 +34,10 @@ function describeResource(resource: string): string {
       "free time",
       "time",
       "runway",
+      "patience",
+      "outlast",
+      "obscurity",
+      "unseen",
     ])
   ) {
     return "there is enough runway for compounding to matter";
@@ -42,12 +46,14 @@ function describeResource(resource: string): string {
     containsAny(resource, [
       "network",
       "team",
+      "crew",
       "family",
       "mentor",
       "audience",
       "adult backing",
       "coaches",
       "guides",
+      "move with me",
     ])
   ) {
     return "other people can accelerate the next chapter";
@@ -56,16 +62,28 @@ function describeResource(resource: string): string {
     containsAny(resource, [
       "expertise",
       "portfolio",
+      "craft",
+      "taste",
       "open-source",
       "credential",
       "grades",
       "signal",
       "opportunity",
+      "opening",
       "deal flow",
       "rare",
     ])
   ) {
     return "there is already real proof to build from";
+  }
+  if (
+    containsAny(resource, [
+      "embarrassment",
+      "recover fast",
+      "foolish",
+    ])
+  ) {
+    return "the person can absorb exposure faster than most";
   }
   return "one real advantage already exists";
 }
@@ -78,6 +96,9 @@ function describeConstraint(constraint: string): string {
       "proof",
       "credibility",
       "taken seriously",
+      "avoiding real exposure",
+      "seen doing",
+      "hidden",
     ])
   ) {
     return "proof still trails behind ability";
@@ -85,14 +106,38 @@ function describeConstraint(constraint: string): string {
   if (
     containsAny(constraint, [
       "too many options",
+      "too many doors",
+      "doors open",
       "direction",
       "choice",
       "optionality",
       "commitment",
       "fork",
+      "decorating",
+      "cage",
     ])
   ) {
     return "too many live paths are thinning momentum";
+  }
+  if (
+    containsAny(constraint, [
+      "scattering",
+      "scatter",
+      "starting strong",
+      "freedom requires",
+      "craving freedom",
+    ])
+  ) {
+    return "the person keeps dissolving momentum at the exact moment it arrives";
+  }
+  if (
+    containsAny(constraint, [
+      "waiting for certainty",
+      "waiting",
+      "hesitate",
+    ])
+  ) {
+    return "waiting has become the default move";
   }
   if (
     containsAny(constraint, [
@@ -146,6 +191,9 @@ function inferCoreTension(fields: Fields, constraints: string[]): string {
   const source = [
     fields.trajectoryFocus,
     fields.currentMode,
+    fields.costWillingness,
+    fields.magneticScene,
+    fields.socialMirror,
     ...constraints,
     fields.resources,
   ]
@@ -161,6 +209,9 @@ function inferCoreTension(fields: Fields, constraints: string[]): string {
       "serious",
       "credibility",
       "noticed",
+      "legibility",
+      "underestimated",
+      "seen",
     ])
   ) {
     return "capability is arriving faster than public proof, so the next move depends on visible evidence.";
@@ -174,6 +225,8 @@ function inferCoreTension(fields: Fields, constraints: string[]): string {
       "choices",
       "paths",
       "focus",
+      "decorating",
+      "postpone",
     ])
   ) {
     return "too many identities can still survive, and that freedom is starting to cost momentum.";
@@ -199,6 +252,10 @@ function inferCoreTension(fields: Fields, constraints: string[]): string {
       "ceiling",
       "golden handcuffs",
       "too small",
+      "shrinks",
+      "enlarging",
+      "authored by someone else",
+      "stopped enlarging",
     ])
   ) {
     return "the current track offers safety at the price of becoming smaller inside it.";
@@ -222,8 +279,45 @@ function inferCoreTension(fields: Fields, constraints: string[]): string {
 function inferMomentumPattern(workStyle = ""): string {
   const value = workStyle.toLowerCase();
 
-  if (containsAny(value, ["quietly", "craft", "depth", "niche skill"])) {
+  if (
+    containsAny(value, [
+      "quietly",
+      "craft",
+      "depth",
+      "niche skill",
+      "small room",
+      "one thing gets better",
+      "underestimated",
+    ])
+  ) {
     return "momentum begins in private until the work becomes harder to dismiss than the person behind it.";
+  }
+  if (
+    containsAny(value, [
+      "rooms i'm not in",
+      "name traveling",
+      "rooms i",
+    ])
+  ) {
+    return "reputation travels ahead of the person and starts pulling them into rooms before they're ready.";
+  }
+  if (
+    containsAny(value, [
+      "old life impossible",
+      "one decision",
+      "leaving a city",
+      "stopped enlarging",
+    ])
+  ) {
+    return "momentum arrives through a single load-bearing decision that makes the old life structurally unavailable.";
+  }
+  if (
+    containsAny(value, [
+      "made once and built right",
+      "money arriving from something",
+    ])
+  ) {
+    return "compounding arrives as output from something built once and correctly, not from continuous effort.";
   }
   if (
     containsAny(value, [
@@ -301,18 +395,103 @@ function inferRiskPattern(riskTolerance = ""): string {
   if (containsAny(value, ["all-in", "bet early on myself"])) {
     return "they can tolerate long ambiguity, but once conviction crystallizes the commitment becomes total.";
   }
+  // New costWillingness-texture arms:
+  if (
+    containsAny(value, [
+      "visibility before i feel ready",
+      "visibility before",
+      "seen before",
+    ])
+  ) {
+    return "they are ready to pay the price of being seen before they feel finished, so exposure itself becomes an input.";
+  }
+  if (
+    containsAny(value, [
+      "years of obscurity",
+      "obscurity while",
+      "invisibility",
+    ])
+  ) {
+    return "they are willing to spend years unseen, so the timeline is set by the work's maturation, not by social impatience.";
+  }
+  if (
+    containsAny(value, [
+      "burning the version",
+      "burning a version",
+      "old version",
+    ])
+  ) {
+    return "they are willing to disappoint the people who loved the old version, which means identity change is already underway.";
+  }
+  if (
+    containsAny(value, [
+      "financial tightness",
+      "tighter financially",
+      "authorship",
+    ])
+  ) {
+    return "they accept financial narrowness as the price of authorship, so compensation is trailing autonomy.";
+  }
+  if (
+    containsAny(value, [
+      "conflict with people",
+      "expect the old me",
+      "disappointing people",
+    ])
+  ) {
+    return "they accept relational friction as the cost of changing shape, so the old social equilibrium is no longer load-bearing.";
+  }
+  if (
+    containsAny(value, [
+      "looking naive",
+      "converging",
+      "naive in public",
+    ])
+  ) {
+    return "they are willing to look premature while the convergence is still invisible, which protects the work from public pressure.";
+  }
   return "uncertainty is filtered through fear of becoming trapped in the wrong life shape.";
 }
 
 function inferIdentityPressure(
   constraints: string[],
   rejectedFuture: string,
-  obsessions: string[]
+  obsessions: string[],
+  socialMirror = ""
 ): string {
-  const source = [...constraints, rejectedFuture, ...obsessions].join(" ").toLowerCase();
+  const source = [...constraints, rejectedFuture, ...obsessions, socialMirror]
+    .join(" ")
+    .toLowerCase();
 
-  if (containsAny(source, ["too safe", "ordinary", "borrowed"])) {
+  if (
+    containsAny(source, [
+      "too safe",
+      "ordinary",
+      "borrowed",
+      "different metric",
+      "serious than i looked",
+    ])
+  ) {
     return "identity strain comes from refusing a future that looks stable but feels authored by someone else.";
+  }
+  if (
+    containsAny(source, [
+      "quiet period was not stagnation",
+      "quiet stretch",
+      "quiet period",
+      "compounding",
+      "detours were actually alignment",
+      "detours",
+    ])
+  ) {
+    return "the person is compounding silently and needs the story to eventually make the quiet period legible as the actual work.";
+  }
+  if (
+    containsAny(source, [
+      "built something while they were talking",
+    ])
+  ) {
+    return "the person is tired of narrating and wants the output itself to do the talking.";
   }
   if (containsAny(source, ["too performative", "audience", "algorithm"])) {
     return "the person wants recognition without becoming a product optimized for approval.";
@@ -329,20 +508,70 @@ function inferIdentityPressure(
 function inferLikelyTransformation(
   inflection = "",
   whyThese = "",
-  horizon = ""
+  horizon = "",
+  delayFailureMode = ""
 ): string {
-  const source = `${inflection} ${whyThese}`.toLowerCase();
+  const source = `${inflection} ${whyThese} ${delayFailureMode}`.toLowerCase();
 
-  if (containsAny(source, ["noticed", "desk", "ignore", "viral", "stage"])) {
+  if (
+    containsAny(source, [
+      "public moment",
+      "noticed",
+      "desk",
+      "ignore",
+      "viral",
+      "stage",
+      "seen",
+    ])
+  ) {
     return "a moment of visibility forces a larger identity to appear before it feels comfortable.";
   }
-  if (containsAny(source, ["fund", "back", "partner", "relationship", "door"])) {
+  if (
+    containsAny(source, [
+      "fund",
+      "back",
+      "partner",
+      "relationship",
+      "door",
+      "stranger bets",
+      "someone picks",
+    ])
+  ) {
     return "another person changes the scale of what becomes possible, and politeness stops being a good excuse.";
   }
-  if (containsAny(source, ["money pressure", "runway", "deadline", "scale"])) {
+  if (
+    containsAny(source, [
+      "money pressure",
+      "runway",
+      "deadline",
+      "scale",
+      "shock",
+      "closes every door",
+    ])
+  ) {
     return "external pressure strips away hedging and makes commitment visible.";
   }
-  if (containsAny(source, ["start", "finish", "planning", "go"])) {
+  if (
+    containsAny(source, [
+      "body forces",
+      "pace correction",
+      "scattering",
+      "finish",
+    ])
+  ) {
+    return "the body or a finished artifact imposes a pace the conscious self would never have chosen, and the next version arrives inside that correction.";
+  }
+  if (
+    containsAny(source, [
+      "commitment arrives",
+      "constraint i chose",
+      "structure i resented",
+      "leaving becomes harder",
+    ])
+  ) {
+    return "a chosen constraint becomes the structure that carries the next version, reversing the old relationship to freedom.";
+  }
+  if (containsAny(source, ["start", "planning", "go"])) {
     return "the change begins when planning turns into a visible act that cannot be quietly taken back.";
   }
   return `the likely change arrives inside the ${horizon || "next chapter"} and reorganizes both behavior and social reality.`;
@@ -532,12 +761,14 @@ export function buildStoryConditioning(
       identityPressure: inferIdentityPressure(
         constraints,
         rejectedFuture,
-        obsessions
+        obsessions,
+        fields.socialMirror
       ),
       likelyTransformation: inferLikelyTransformation(
         fields.inflection,
         whyThese,
-        fields.timeHorizon
+        fields.timeHorizon,
+        fields.delayFailureMode
       ),
       selectionCharge: inferSelectionCharge(whyThese, rejectedFuture),
       rejectedGravity: inferRejectedGravity(rejectedFuture),

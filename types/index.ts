@@ -45,19 +45,32 @@ export const MAX_BULLET_PASSES = 3;
 export type AgeGroup = "youth" | "twenties" | "midcareer" | "senior";
 
 export interface Fields {
+  // Chapter I — Now
   age: string;
-  location: string;
-  skills: string;
-  resources: string;
-  constraints: string;
-  obsessions: string;
-  currentMode: string;
-  trajectoryFocus: string;
-  workStyle: string;
-  riskTolerance: string;
-  timeHorizon: string;
   mobility: string;
+  currentMode: string;
+  // Chapter II — Unstable
+  trajectoryFocus: string;
+  hiddenEdge: string;
+  recurringTrap: string;
+  costWillingness: string;
+  // Chapter III — Pull
+  magneticScene: string;
+  socialMirror: string;
+  obsessions: string;
+  // Chapter IV — Motion
+  delayFailureMode: string;
   inflection: string;
+  // Legacy aliases (populated by buildFieldsFromAnswers so prompts.ts inference
+  // still fires against the old keyword arms while the new fields carry the
+  // real signal):
+  location: string; // = mobility
+  skills: string; // derived (may be "")
+  resources: string; // = hiddenEdge
+  constraints: string; // = recurringTrap
+  workStyle: string; // = magneticScene
+  riskTolerance: string; // = costWillingness
+  timeHorizon: string; // = socialMirror
 }
 
 export interface CurationAnswers {
