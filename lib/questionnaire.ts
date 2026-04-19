@@ -1642,6 +1642,33 @@ export function normalizeQuestionnaireAnswers(
   return normalized;
 }
 
+// Dev-only: fill every currently-visible step with a random option.
+// Iterates because some steps are conditional on earlier answers.
+export function randomizeQuestionnaireAnswers(): QuestionnaireAnswers {
+  const pick = <T>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
+  let answers: QuestionnaireAnswers = {};
+  for (let guard = 0; guard < 10; guard += 1) {
+    const steps = getQuestionnaireSteps(answers);
+    const next: QuestionnaireAnswers = {};
+    for (const step of steps) {
+      if (step.options.length === 0) continue;
+      if (step.mode === "single") {
+        next[step.id] = [pick(step.options).value];
+      } else {
+        const max = Math.min(step.maxSelect ?? step.options.length, step.options.length);
+        const n = 1 + Math.floor(Math.random() * max);
+        const shuffled = [...step.options].sort(() => Math.random() - 0.5);
+        next[step.id] = shuffled.slice(0, n).map((o) => o.value);
+      }
+    }
+    const prevKeys = Object.keys(answers).sort().join(",");
+    const nextKeys = Object.keys(next).sort().join(",");
+    answers = next;
+    if (prevKeys === nextKeys) break;
+  }
+  return answers;
+}
+
 export function buildFieldsFromAnswers(answers: QuestionnaireAnswers): Fields {
   const normalized = normalizeQuestionnaireAnswers(answers);
   const age = getSingleAnswer(normalized, "age");
@@ -1887,7 +1914,7 @@ function getRouteOptionMap(
   return youth ? YOUTH_ROUTE_OPTION_MAP : ADULT_ROUTE_OPTION_MAP;
 }
 
-function getAgeGroup(age: string): AgeGroup {
+export function getAgeGroup(age: string): AgeGroup {
   switch (age) {
     case "Under 20":
       return "youth";

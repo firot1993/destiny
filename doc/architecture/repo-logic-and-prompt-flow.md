@@ -8,8 +8,11 @@ The current system is:
 2. A scan pass that generates 10 unresolved future fragments
 3. A user-curated bullet phase that chooses visible story motifs
 4. A hidden conditioning layer that compresses questionnaire data into latent forces
-5. A linear rewrite chain that turns selected motifs into a trajectory
-6. A final anti-echo cleanup pass that strips questionnaire-sounding prose
+5. A structure step that drafts scenes from selected motifs
+6. A critique step that identifies what's weak in the draft
+7. A sharpen step that expands and revises using critique notes
+8. A final step that produces a 4-paragraph story with signature author voice
+9. A cleanup pass that strips questionnaire-sounding prose and enforces texture
 
 The app still borrows the language of "diffusion," but the runtime is not a true diffusion model. It is a prompt chain with one human curation checkpoint and one final cleanup rewrite.
 
@@ -24,6 +27,7 @@ The logic described here comes primarily from these files:
 - `lib/prompts.ts`
 - `hooks/useGeneration.ts`
 - `lib/revolver.ts`
+- `lib/styles.ts`
 - `app/api/generate/route.ts`
 - `lib/providers.ts`
 - `types/index.ts`
@@ -41,10 +45,13 @@ The key data shapes discussed below are:
 The key prompt entry point is now:
 
 ```ts
-generateStepPrompt(step, totalSteps, conditioning, guidance, prev, lang)
+generateStepPrompt(step, totalSteps, conditioning, guidance, prev, lang, orderedBullets?, critiqueNotes?, signatureAuthor?)
 ```
 
-not the older `state`-string interface.
+Additional prompt constructors:
+
+- `generateCritiquePrompt(draft, conditioning, lang)` — critique after structure step
+- `generateCleanupPrompt(trajectory, lang)` — final anti-echo pass
 
 ## Product Thesis
 
@@ -249,27 +256,33 @@ The buckets remain:
 The runtime call structure is now:
 
 - 1 scan call
-- `denoiseSteps - 1` denoise calls
+- `denoiseSteps - 1` denoise calls (includes structure, critique, sharpen, and final)
+- 1 critique call (after the structure step)
 - 1 cleanup call
 
 So the total model-call count is:
 
 ```text
-denoiseSteps + 1
+denoiseSteps + 2
 ```
 
 Examples:
 
-- `denoiseSteps = 2` -> 1 scan + 1 final denoise + 1 cleanup
-- `denoiseSteps = 4` -> 1 scan + 3 denoise + 1 cleanup
+- `denoiseSteps = 2` -> 1 scan + 1 final denoise + 1 cleanup = 3 (no structure step, so no critique)
+- `denoiseSteps = 4` -> 1 scan + 1 structure + 1 critique + 1 sharpen + 1 final + 1 cleanup = 6
 
-The UI step labels still split later steps into `structure`, `sharpen`, and `refine` using `getStepLabel(...)`, but the prompt templates themselves are simpler than the older version:
+The prompt templates and `maxTokens` vary by step:
 
-- scan
-- early structure (`progress < 0.45`)
-- sharpen/revise (`progress >= 0.45` and not final)
-- final trajectory
-- cleanup
+| Step type | Template | maxTokens | Temperature |
+|-----------|----------|-----------|-------------|
+| scan | scan | 1000 | 1.15 |
+| structure | early structure (progress < 0.45) | 1000 | 1.05 |
+| critique | critique prompt | 800 | 0.7 |
+| sharpen | sharpen/revise (progress >= 0.45, not final) | 1800 | 1.05 |
+| final | final trajectory | 3000 | 1.05 |
+| cleanup | cleanup | 3000 | 0.8 |
+
+The higher `maxTokens` for final and cleanup steps accommodates the new 4-paragraph, 400-600 word output format and CJK tokenization density.
 
 ### Provider and model
 
@@ -362,7 +375,8 @@ Important properties of the implementation:
 - `anchorResource` is derived from the first selected resource
 - `anchorConstraint` and `secondaryConstraint` are derived from the first two selected constraints
 - `latentForces` are synthesized from canonical questionnaire values and, when available, post-curation answers
-- `personalitySignature` is derived from Big Five scores without using trait names in the prompt text
+- `exposurePattern` is still computed and stored in the type, but `formatConditioning` no longer renders it into the prompt \u2014 it is currently dead data
+- `personalitySignature` is derived from Big Five scores without using trait names in the prompt text; only `combinedReading` is rendered into the prompt, the five individual dimensions are dropped to prevent checklist-following
 
 This means the questionnaire is no longer prompt-visible in raw form. The model sees an interpretation of the questionnaire, not a replay of the questionnaire.
 
@@ -386,92 +400,98 @@ All prompts are assembled in `lib/prompts.ts`.
 
 ### Shared formatting
 
-`formatConditioning(...)` renders the hidden state as three sections:
+`formatConditioning(...)` compresses the entire `StoryConditioning` object into 4 terse lines:
 
-- `BOUNDARY CONDITIONS`
-- `LATENT FORCES`
-- `PERSONALITY SIGNATURE`
+- `PERSON:` — comma-separated hard facts (age band, mobility, chapter, horizon)
+- `SITUATION:` — resource and constraint descriptions, semicolon-separated
+- `UNDERCURRENTS:` — latent forces as a single unlabeled paragraph (core tension, momentum, risk, identity pressure, likely transformation, selection charge, rejected gravity). `exposurePattern` is computed but currently excluded from rendering.
+- `TEMPERAMENT:` — only the `combinedReading` line; the five individual personality dimensions are dropped to prevent the model from treating them as a checklist.
 
-If `lang !== "en"`, the prompt also gets:
+This is dramatically shorter than the previous version which rendered 21 labeled bullet points across three named sections.
 
-```text
-IMPORTANT: Respond entirely in ${LANG_NAMES[lang] || lang}.
-```
+### Shared rules
+
+A `SHARED_RULES` constant is now injected into every non-scan prompt. It enforces:
+
+- concrete nouns (brand names, street names, exact sums)
+- texture variation (some flat/ordinary sentences alongside charged ones)
+- register mixing
+- unexplained images allowed to stand
+- contradictions allowed to stand
+- no personality labels
+- profile invisibility
+- a banned vocabulary list (`BANNED_VOCAB`): momentum, trajectory, pattern, chapter, identity, tension, pressure, resilience, alignment, pivot, inflection, compounding
 
 ### 1. Scan prompt
 
-The scan prompt now receives:
-
-- formatted conditioning
-- generic world-state rule
-- guidance scale
-
-Its job is still to generate exactly 10 unresolved fragments.
-
-The important difference from the old version is that it no longer sees:
-
-- raw questionnaire labels
-- explicit Big Five trait names
-- one giant profile recap
-
-So scan is now derived from compressed forces, not from a plain-English state dump.
+Unchanged in structure. Receives formatted conditioning, world-state rule, and guidance scale. Generates 10 unresolved fragments.
 
 ### 2. Early structure prompt
 
-For non-final denoise steps where `progress < 0.45`, the prompt asks the model to:
+For non-final steps where `progress < 0.45`. Now asks for:
 
-- shape possible causality from selected fragments
-- treat selected fragments as the only valid surface motifs
-- use the profile only as hidden causality
-- avoid restating the profile as prose
-- avoid questionnaire phrase reuse
+- 5-6 sentences of continuous prose drawn from fragments
+- open inside a concrete image or action
+- at least one ordinary, low-stakes sentence ("a meal, a receipt, a walk home")
+- strange fragments left strange, not rationalized
+- not required to cover every fragment
+- `SHARED_RULES` appended
 
-This is the core anti-echo rule.
+The old version asked the model to "explain how fragments could begin becoming true" — this produced rationalistic, modular prose. The new version asks for scenes.
+
+### 2b. Critique step (new)
+
+`generateCritiquePrompt(draft, conditioning, lang)` runs after the structure step. It asks a "sharp-eyed story editor" to judge the draft on:
+
+- profile/questionnaire paraphrase leakage
+- uniformly literary tone vs varied register
+- unexplained images left to breathe
+- motifs as concrete actions vs described themes
+- at least one unexpected detail or contradiction
+- causal chaining vs parallel event listing
+
+Output: 3-5 short, concrete revision notes with specific problems and fixes. These notes feed into the sharpen step.
 
 ### 3. Sharpen/revise prompt
 
-For later non-final steps, the prompt asks the model to:
+For later non-final steps (`progress >= 0.45`). Now asks to:
 
-- preserve surface motifs
-- add decisions, sacrifices, and social consequences
-- show what gets easier and what gets more expensive
-- avoid direct reuse of questionnaire phrases
-- make the story feel discovered rather than assembled
+- rewrite and expand into 2-3 paragraphs (200-350 words)
+- preserve existing images and motifs
+- replace summary/explanation sentences with concrete details or overheard moments
+- break uniform literary tone with plainly stated or slightly banal sentences
+- leave at least one thing unexplained
+- address critique notes if available
+- `SHARED_RULES` appended
 
-There is no longer a separate late-denoise template with explicit Big Five language.
+If critique notes exist from step 2b, they are injected as a `CRITIQUE NOTES` block.
 
 ### 4. Final trajectory prompt
 
-The final prompt asks for:
+The final step now produces a substantially longer piece:
 
-- 8-12 sentences
-- recognizable selected motifs
-- change through pressure rather than explanation
-- outer consequences plus inner reorganization
-- an ending that feels surprising in shape but inevitable in retrospect
+- **4 paragraphs** separated by blank lines, 400-600 words total, each paragraph 4-8 sentences
+- no section labels or numbers
 
-It also repeats the anti-echo rules:
+New features:
 
-- selected fragments are the only valid surface motifs
-- profile is hidden causality only
-- do not restate the profile as prose
+- **Ordered bullet anchoring**: If 6 bullets were caught, each paragraph is anchored to specific motifs in chamber order (paragraph 1 → bullet 1, paragraph 2 → bullets 2-3, etc.). Motifs appear as images/actions, not quoted or explained.
+- **Signature style**: `lib/styles.ts` picks an author voice based on age group and questionnaire affinity scoring. The prompt says "Write in the voice of ${author}. Carry their sentence rhythm, attention, and register. Do not name the author, quote their work, or imitate specific stories."
+- `SHARED_RULES` appended
+
+The old version asked for 8-12 sentences. The new version asks for a full short story.
 
 ### 5. Cleanup prompt
 
-After denoising, `generateCleanupPrompt(...)` runs one more model call:
+After denoising, `generateCleanupPrompt(...)` now has:
 
-```text
-Revise this trajectory so it no longer sounds like a paraphrase of a questionnaire.
-```
+- An explicit banned-patterns list (personality dimensions, abstract behavioral descriptions, thesis statements, banned vocabulary, motivational-poster language)
+- Each banned sentence must be replaced with a concrete scene, image, consequence, or social fact
+- Texture check: if every sentence carries the same literary weight, break the pattern with a plain/offhand/mundane sentence
+- Must preserve paragraph structure (4 paragraphs separated by blank lines)
+- Revised version must be at least as long as the original
 
-Its rules are:
-
-- remove direct profile wording
-- replace abstract self-description with scenes, behaviors, consequences, and social facts
-- keep the meaning and structure
-- do not make the prose more generic
-
-This is the last guard against profile echo.
+This is much stronger than the previous version which only asked to "remove direct profile wording."
 
 ## Runtime Flow
 
@@ -562,26 +582,41 @@ So the visible DNA of the story is still chamber-ordered bullet text.
 2. Refuse to run if no bullets are caught
 3. Build full conditioning from `fields + big5 + curationAnswers`
 4. Build `mergedNoiseSeed` from caught bullets
-5. Initialize:
+5. Build `orderedBulletTexts` sorted by `chamberIndex`
+6. Pick `signatureStyle` via `pickSignatureStyle(ageGroup, questionnaireAnswers)` from `lib/styles.ts`
+7. Initialize:
 
 ```ts
 const stepResults = [mergedNoiseSeed];
+let critiqueNotes: string | null = null;
 ```
 
-6. For each `step` from `1` to `denoiseSteps - 1`
-   - build prompt with `prev = stepResults[step - 1]`
+8. For each `step` from `1` to `denoiseSteps - 1`:
+   - build prompt with `prev`, `orderedBulletTexts`, `critiqueNotes`, and `signatureStyle.author`
+   - select `maxTokens` based on step type (final: 3000, sharpen: 1800, other: 1000)
    - call the model with temperature `1.05`
    - push the returned text into `stepResults`
-7. Run the cleanup prompt with temperature `0.8`
-8. Replace the final denoise output with the cleaned trajectory
-9. Store:
-   - cleaned trajectory in `trajectories`
-   - the full step list in `allStepOutputs`
+   - if this was the structure step (progress < 0.45 and not final), run `generateCritiquePrompt` with temperature `0.7` and store the result in `critiqueNotes`
+9. Run the cleanup prompt with temperature `0.8` and maxTokens `3000`
+10. Replace the final denoise output with the cleaned trajectory
+11. Store:
+    - cleaned trajectory in `trajectories`
+    - the full step list in `allStepOutputs`
 
 So the canonical final story is:
 
 - not the raw last denoise output
 - but the cleaned version returned by the anti-echo pass
+
+### Signature style
+
+`lib/styles.ts` maintains a pool of author voices. `pickSignatureStyle(ageGroup, answers)` selects one by:
+
+1. Filtering to authors whose `ages` array includes the user's age group
+2. Scoring each author's `affinities` keywords against taste-bearing questionnaire answers (`magneticScene`, `socialMirror`, `obsessions`, `recurringTrap`, `delayFailureMode`)
+3. Picking uniformly from the top-scoring authors
+
+The selected author name is injected into the final step prompt as a voice/register instruction. The model is told to carry their sentence rhythm without naming them, quoting their work, or imitating specific stories.
 
 ## Generate Page Summary
 
@@ -597,6 +632,13 @@ It now shows `Story Conditions`:
   - behavioral personality signature
 
 This UI mirrors the underlying redesign: the system is now explicit about hidden causality rather than explicit about raw profile fields.
+
+The final trajectory is rendered as multi-paragraph prose by `TrajectoryCard`, which splits on double newlines (`\n{2,}`) and renders each paragraph as a separate `<p>` element with spacing.
+
+Dev-only features:
+
+- `randomizeQuestionnaireAnswers()` button to fill all questionnaire steps with random options
+- `catchAll` button to catch all flying bullets at once
 
 ## API Boundary And Provider Normalization
 

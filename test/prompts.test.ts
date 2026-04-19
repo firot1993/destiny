@@ -70,13 +70,13 @@ describe("prompt conditioning", () => {
       "en"
     );
 
-    expect(prompt.content).toContain("BOUNDARY CONDITIONS:");
-    expect(prompt.content).toContain("LATENT FORCES:");
-    expect(prompt.content).toContain("PERSONALITY SIGNATURE:");
+    expect(prompt.content).toContain("PERSON:");
+    expect(prompt.content).toContain("UNDERCURRENTS:");
+    expect(prompt.content).toContain("TEMPERAMENT:");
     expect(prompt.content).toContain(
-      "Treat the selected fragments as the only valid surface motifs of the story."
+      "Do not name personality dimensions or psychological labels."
     );
-    expect(prompt.content).toContain("Do not restate the profile as prose.");
+    expect(prompt.content).toContain("Avoid these words:");
     expect(prompt.content).not.toContain("PERSON'S CURRENT STATE:");
     expect(prompt.content).not.toContain("Personality (Big Five)");
   });

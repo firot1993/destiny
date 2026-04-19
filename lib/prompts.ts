@@ -694,39 +694,50 @@ function guidanceTone(guidance: number): string {
 }
 
 function formatConditioning(conditioning: StoryConditioning): string {
-  const hardState = formatSection("BOUNDARY CONDITIONS", [
-    ["Age band", conditioning.hardState.ageBand],
-    ["Mobility", conditioning.hardState.mobility],
-    ["Current chapter", conditioning.hardState.chapter],
-    ["Time horizon", conditioning.hardState.horizon],
-    ["Anchor resource", conditioning.hardState.anchorResource],
-    ["Primary constraint", conditioning.hardState.anchorConstraint],
-    ["Secondary constraint", conditioning.hardState.secondaryConstraint],
-  ]);
-  const latentForces = formatSection("LATENT FORCES", [
-    ["Core tension", conditioning.latentForces.coreTension],
-    ["Momentum pattern", conditioning.latentForces.momentumPattern],
-    ["Exposure pattern", conditioning.latentForces.exposurePattern],
-    ["Risk pattern", conditioning.latentForces.riskPattern],
-    ["Identity pressure", conditioning.latentForces.identityPressure],
-    ["Likely transformation", conditioning.latentForces.likelyTransformation],
-    ["Selection charge", conditioning.latentForces.selectionCharge],
-    ["Rejected gravity", conditioning.latentForces.rejectedGravity],
-  ]);
-  const personalitySignature = formatSection("PERSONALITY SIGNATURE", [
-    ["Novelty appetite", conditioning.personalitySignature.noveltyAppetite],
-    ["Consistency pressure", conditioning.personalitySignature.consistencyPressure],
-    ["Social propulsion", conditioning.personalitySignature.socialPropulsion],
-    ["Conflict tolerance", conditioning.personalitySignature.conflictTolerance],
-    [
-      "Anticipatory sensitivity",
-      conditioning.personalitySignature.anticipatorySensitivity,
-    ],
-    ["Combined reading", conditioning.personalitySignature.combinedReading],
-  ]);
+  const facts = [
+    conditioning.hardState.ageBand,
+    conditioning.hardState.mobility,
+    conditioning.hardState.chapter,
+    conditioning.hardState.horizon,
+  ].filter(Boolean).join(", ");
 
-  return `${hardState}\n\n${latentForces}\n\n${personalitySignature}`;
+  const constraints = [
+    conditioning.hardState.anchorResource,
+    conditioning.hardState.anchorConstraint,
+    conditioning.hardState.secondaryConstraint,
+  ].filter(Boolean);
+
+  const forces = [
+    conditioning.latentForces.coreTension,
+    conditioning.latentForces.momentumPattern,
+    conditioning.latentForces.riskPattern,
+    conditioning.latentForces.identityPressure,
+    conditioning.latentForces.likelyTransformation,
+    conditioning.latentForces.selectionCharge,
+    conditioning.latentForces.rejectedGravity,
+  ].filter(Boolean);
+
+  const personality = conditioning.personalitySignature.combinedReading;
+
+  const lines: string[] = [];
+  if (facts) lines.push(`PERSON: ${facts}.`);
+  if (constraints.length > 0) lines.push(`SITUATION: ${constraints.join("; ")}.`);
+  if (forces.length > 0) lines.push(`UNDERCURRENTS: ${forces.join(" · ")}`);
+  if (personality) lines.push(`TEMPERAMENT: ${personality}`);
+  return lines.join("\n");
 }
+
+const BANNED_VOCAB =
+  "momentum, trajectory, pattern, chapter, identity, tension, pressure, resilience, alignment, pivot, inflection, compounding";
+
+const SHARED_RULES = `- Use concrete nouns. Brand names, street names, specific objects, exact sums, weekday names. Avoid abstractions.
+- Let some sentences be flat, ordinary, or even boring. Not every line needs to carry weight.
+- Mix registers. A plain sentence next to a strange one is better than six literary sentences in a row.
+- Leave things unexplained. Not every image needs to pay off. Not every choice needs a reason.
+- Let contradictions stand. The person can be two things at once.
+- Do not name personality dimensions or psychological labels.
+- The profile must remain invisible; a reader should not be able to reverse-engineer the questionnaire.
+- Avoid these words: ${BANNED_VOCAB}.`;
 
 export function buildStoryConditioning(
   fields: Fields,
@@ -784,13 +795,54 @@ export function buildStoryConditioning(
   };
 }
 
+export function generateCritiquePrompt(
+  draft: string,
+  conditioning: StoryConditioning,
+  lang = "en"
+): Message {
+  const langInstruction =
+    lang !== "en"
+      ? `\n\nRespond in ${LANG_NAMES[lang] || lang}.`
+      : "";
+  const context = formatConditioning(conditioning);
+  return {
+    role: "user",
+    content: `You are a sharp-eyed story editor. Read this early draft and decide what would make it more alive in the next revision.
+
+${context}
+
+DRAFT:
+${draft}
+
+Judge along these axes:
+- Does any sentence read like a personality profile, self-help line, or questionnaire paraphrase?
+- Is the tone uniformly literary, or does register vary (plain, offhand, even banal sentences mixed with charged ones)?
+- Are there unexplained images left to breathe, or is everything tied into meaning?
+- Do the motifs appear as concrete actions and objects, or as described themes?
+- Is there at least one unexpected detail, contradiction, or thing that resists easy reading?
+- Does the story cause itself forward, or is it a list of parallel events?
+
+Output 3-5 short, concrete revision notes. Each note should name a specific problem and a specific fix. No general praise, no restating the draft. If a note can only be phrased abstractly, drop it.
+
+Format:
+- <note>
+- <note>
+- <note>
+
+Respond with only the notes.${langInstruction}`,
+  };
+}
+
 export function generateStepPrompt(
   step: number,
   totalSteps: number,
   conditioning: StoryConditioning,
   guidance: number,
   prev: string | null,
-  lang = "en"
+  lang = "en",
+  orderedBullets?: string[],
+  critiqueNotes?: string | null,
+  signatureAuthor?: string | null
 ): Message {
   const langInstruction =
     lang !== "en"
@@ -848,28 +900,40 @@ Respond with only the ${NOISE_SCAN_COUNT} fragments.${langInstruction}`,
   }
 
   if (step === totalSteps - 1) {
+    const hasStructuredBullets = orderedBullets && orderedBullets.length >= 6;
+    const bulletBlock = hasStructuredBullets
+      ? `\nMOTIFS (in the order they should anchor the story):
+- Paragraph 1 anchor: "${orderedBullets[0]}"
+- Paragraph 2 anchors: "${orderedBullets[1]}", "${orderedBullets[2]}"
+- Paragraph 3 anchors: "${orderedBullets[3]}", "${orderedBullets[4]}"
+- Paragraph 4 anchor: "${orderedBullets[5]}"
+`
+      : "";
+    const structureLine = hasStructuredBullets
+      ? `Each paragraph grows outward from its anchor motif(s) above. The motifs should appear as concrete images or actions inside the paragraph — not quoted, not explained. The motif is a seed; the paragraph is what it becomes.`
+      : `The paragraphs do not need to follow a rigid arc. Think of them as four different vantage points onto the same life.`;
+    const signatureBlock = signatureAuthor
+      ? `\nSIGNATURE STYLE:
+Write in the voice of ${signatureAuthor}. Carry their sentence rhythm, attention, and register. Do not name the author, quote their work, or imitate specific stories.
+`
+      : "";
+
     return {
       role: "user",
       content: `You are finalizing a possible trajectory.
 
 ${context}
-
+${bulletBlock}${signatureBlock}
 PREVIOUS DRAFT:
 ${prev}
 
 TASK:
-Write a vivid, coherent future trajectory in 8-12 sentences.
+Write a longer story about this person's future life: exactly 4 paragraphs, separated by blank lines, roughly 400-600 words total. Each paragraph should be 4-8 sentences. Do NOT label or number the paragraphs — just write them.
 
-Requirements:
-- The selected motifs should remain recognizable.
-- The person should change through pressure, not through explanation.
-- Show outer consequences and inner reorganization.
-- Include approximate time markers only where they help inevitability.
-- Treat the selected fragments as the only valid surface motifs of the story.
-- Use the profile only as hidden causality.
-- Do not restate the profile as prose.
-- Do not repeat questionnaire phrases unless they already appear in the selected fragments or previous draft.
-- The ending should feel surprising in shape, but inevitable in retrospect.
+${structureLine} Move through time freely — years can pass in a clause, or a single afternoon can fill a paragraph. Open inside a specific scene, not a summary. Something should have shifted by the end, but not in a way that resolves into a lesson.
+
+Rules:
+${SHARED_RULES}
 
 Respond with only the final trajectory.${langInstruction}`,
     };
@@ -878,7 +942,7 @@ Respond with only the final trajectory.${langInstruction}`,
   if (progress < 0.45) {
     return {
       role: "user",
-      content: `You are shaping possible causality from selected future fragments.
+      content: `You are building the first draft of a possible future from selected fragments.
 
 ${context}
 
@@ -886,44 +950,35 @@ ${step === 1 ? "SELECTED FRAGMENTS" : "PREVIOUS DRAFT"}:
 ${prev}
 
 TASK:
-Write 5-6 sentences that explain how these fragments could begin becoming true.
+Write 5-6 sentences of continuous prose drawn from these fragments. Open inside a concrete image or action. Include at least one ordinary, low-stakes sentence — a meal, a receipt, a walk home — alongside the charged ones. If a fragment is strange, let it stay strange; do not rationalize it. You don't need to cover every fragment.
 
 Rules:
-- Treat the selected fragments as the only valid surface motifs of the story.
-- Use the profile only as hidden causality.
-- Do not restate the profile as prose.
-- Do not repeat questionnaire phrases unless they appear in the selected fragments.
-- Do not summarize the person.
-- Let contradiction remain.
-- Include at least one concrete shift in behavior, environment, or commitment.
+${SHARED_RULES}
 
 Respond with only the trajectory draft.${langInstruction}`,
     };
   }
+
+  const critiqueBlock = critiqueNotes
+    ? `\nCRITIQUE NOTES (address these in the revision):\n${critiqueNotes}\n`
+    : "";
 
   return {
     role: "user",
     content: `You are sharpening a possible life trajectory.
 
 ${context}
-
+${critiqueBlock}
 PREVIOUS DRAFT:
 ${prev}
 
 TASK:
-Make the trajectory more specific through decisions, sacrifices, and changes in social reality.
+Rewrite and expand the draft into 2-3 paragraphs separated by blank lines, roughly 200-350 words total. Each paragraph 3-6 sentences. Preserve existing images and motifs; do not add new themes. Replace any sentence that feels like a summary or explanation with a concrete detail or overheard moment. Break uniform literary tone — let at least one sentence be plainly stated, offhand, or slightly banal. Leave at least one thing unexplained. Do not label paragraphs.${critiqueNotes ? " Prioritize addressing the critique notes above." : ""}
 
 Rules:
-- Preserve the surface motifs already present.
-- Add 2-3 turning points, but do not over-explain them.
-- Show what becomes easier, and what becomes more expensive.
-- Treat the selected fragments as the only valid surface motifs of the story.
-- Use the profile only as hidden causality.
-- Do not restate the profile as prose.
-- Avoid direct reuse of questionnaire phrases.
-- Make the story feel discovered, not assembled from profile data.
+${SHARED_RULES}
 
-Write 6-8 sentences. Respond with only the revised trajectory.${langInstruction}`,
+Respond with only the revised trajectory.${langInstruction}`,
   };
 }
 
@@ -938,16 +993,21 @@ export function generateCleanupPrompt(
 
   return {
     role: "user",
-    content: `Revise this trajectory so it no longer sounds like a paraphrase of a questionnaire.
+    content: `Read this trajectory and rewrite any sentence that sounds like it came from a personality test, self-help book, or career questionnaire.
 
 TRAJECTORY:
 ${trajectory}
 
-Rules:
-- Remove direct profile wording.
-- Replace abstract self-description with scenes, behaviors, consequences, and social facts.
-- Keep the meaning and structure.
-- Do not make the prose more generic.
+Rewrite any sentence that:
+- Names a personality dimension (e.g. "novelty appetite", "risk tolerance", "openness")
+- Describes a behavioral pattern in abstract terms (e.g. "compounding begins when...")
+- Reads like a thesis statement about who the person is
+- Uses any of these words: ${BANNED_VOCAB}
+- Could appear on a motivational poster or LinkedIn bio
+
+Replace each such sentence with a concrete scene, image, consequence, or social fact that carries the same meaning.
+
+Also check the texture: if every sentence carries the same literary weight, break the pattern. Add one plain, offhand, or mundane sentence. Leave at least one image unexplained. Keep chronology and the existing motifs intact — do not add new themes. Preserve the paragraph structure (4 paragraphs separated by blank lines) and do not shorten the piece; the revised version should be at least as long as the original.
 
 Respond with only the revised trajectory.${langInstruction}`,
   };

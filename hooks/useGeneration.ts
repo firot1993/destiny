@@ -5,6 +5,7 @@ import type {
   CurationAnswers,
   Fields,
   NoiseFragment,
+  QuestionnaireAnswers,
   Bullet,
   RunPhase,
   WorkflowStage,
@@ -20,9 +21,12 @@ import {
   buildStoryConditioning,
   generateStepPrompt,
   generateCleanupPrompt,
+  generateCritiquePrompt,
   extractNormalizedText,
   parseNoiseFragments,
 } from "@/lib/prompts";
+import { getAgeGroup } from "@/lib/questionnaire";
+import { pickSignatureStyle } from "@/lib/styles";
 import {
   DAILY_USAGE_STORAGE_PREFIX,
   API_ROUTE,
@@ -103,6 +107,7 @@ function resolveDailyUsage(opts: {
 export interface UseGenerationParams {
   fields: Fields;
   big5: number[];
+  questionnaireAnswers?: QuestionnaireAnswers;
   curationAnswers?: Partial<CurationAnswers>;
   guidance: number;
   denoiseSteps: number;
@@ -128,6 +133,7 @@ export interface UseGenerationReturn {
   catchBullet: (bulletId: number) => void;
   ricochetSingle: (bulletId: number) => void;
   ricochetUncaught: () => void;
+  catchAll: () => void;
   reloadScan: () => Promise<void>;
   stopGeneration: () => void;
   previewAnimation: (fakeBullets: Bullet[]) => void;
@@ -136,6 +142,7 @@ export interface UseGenerationReturn {
 export function useGeneration({
   fields,
   big5,
+  questionnaireAnswers,
   curationAnswers,
   guidance,
   denoiseSteps,
@@ -194,7 +201,8 @@ export function useGeneration({
 
   const callModel = async (
     messages: ReturnType<typeof generateStepPrompt>[],
-    temperature = 1.0
+    temperature = 1.0,
+    maxTokens = 1000
   ): Promise<string> => {
     const today = getUtcDateKey();
     const currentUsage =
@@ -211,7 +219,7 @@ export function useGeneration({
       body: JSON.stringify({
         provider,
         model,
-        max_tokens: 1000,
+        max_tokens: maxTokens,
         temperature,
         messages,
       }),
@@ -337,6 +345,25 @@ export function useGeneration({
     setBullets((prev) => prev.map(ricochetBullet));
   };
 
+  const catchAll = () => {
+    if (isGenerating) return;
+    setBullets((prev) => {
+      let chamber = prev.filter((b) => b.status === "caught").length;
+      if (chamber >= REVOLVER_CHAMBERS) return prev;
+      const next = prev.map((b) => {
+        if (chamber >= REVOLVER_CHAMBERS) return b;
+        if (b.status === "flying" || b.status === "ricocheting") {
+          const caught = { ...b, status: "caught" as const, chamberIndex: chamber };
+          chamber += 1;
+          return caught;
+        }
+        return b;
+      });
+      if (chamber >= REVOLVER_CHAMBERS) setRunPhase("ready");
+      return next;
+    });
+  };
+
   const reloadScan = async () => {
     setBullets([]);
     await scanNoiseFragments();
@@ -353,6 +380,14 @@ export function useGeneration({
 
     const conditioning = buildStoryConditioning(fields, big5, curationAnswers);
     const mergedNoiseSeed = buildBulletSeed(bullets);
+    const orderedBulletTexts = [...bullets]
+      .filter((b) => b.status === "caught" && b.chamberIndex !== null)
+      .sort((a, b) => (a.chamberIndex ?? 0) - (b.chamberIndex ?? 0))
+      .map((b) => b.text);
+    const signatureStyle = pickSignatureStyle(
+      getAgeGroup(fields.age),
+      questionnaireAnswers
+    );
 
     setIsGenerating(true);
     setRunPhase("denoising");
@@ -362,6 +397,7 @@ export function useGeneration({
 
     try {
       const stepResults: string[] = [mergedNoiseSeed];
+      let critiqueNotes: string | null = null;
 
       for (let step = 1; step < denoiseSteps; step++) {
         if (abortRef.current) break;
@@ -372,10 +408,27 @@ export function useGeneration({
           conditioning,
           guidance,
           stepResults[step - 1],
-          lang
+          lang,
+          orderedBulletTexts,
+          critiqueNotes,
+          signatureStyle.author
         );
-        const result = await callModel([msg], 1.05);
+        // Final step produces the full 4-paragraph story; sharpen produces 2-3
+        // paragraphs. Give them enough headroom (esp. for CJK, which tokenizes
+        // more densely than English).
+        const isFinalStep = step === denoiseSteps - 1;
+        const progress = step / Math.max(1, denoiseSteps - 1);
+        const isSharpenStep = step !== 0 && !isFinalStep && progress >= 0.45;
+        const stepMaxTokens = isFinalStep ? 3000 : isSharpenStep ? 1800 : 1000;
+        const result = await callModel([msg], 1.05, stepMaxTokens);
         stepResults.push(result);
+
+        // Critique after the structure step (progress < 0.45).
+        const isStructureStep = step !== 0 && !isFinalStep && progress < 0.45;
+        if (isStructureStep && !abortRef.current) {
+          const critiqueMsg = generateCritiquePrompt(result, conditioning, lang);
+          critiqueNotes = await callModel([critiqueMsg], 0.7, 800);
+        }
       }
 
       if (!abortRef.current && stepResults.length > 0) {
@@ -383,7 +436,7 @@ export function useGeneration({
           stepResults[stepResults.length - 1],
           lang
         );
-        const cleanedTrajectory = await callModel([cleanupPrompt], 0.8);
+        const cleanedTrajectory = await callModel([cleanupPrompt], 0.8, 3000);
         stepResults[stepResults.length - 1] = cleanedTrajectory;
         setTrajectories([cleanedTrajectory]);
         setAllStepOutputs([stepResults]);
@@ -425,6 +478,7 @@ export function useGeneration({
     catchBullet: catchBulletAction,
     ricochetSingle,
     ricochetUncaught,
+    catchAll,
     reloadScan,
     stopGeneration: () => { abortRef.current = true; },
     previewAnimation,

@@ -47,18 +47,27 @@ export function TrajectoryCard({
       >
         {t("trajectory_label")} {index + 1}
       </div>
-      <p
-        className="serif"
-        style={{
-          color: theme.ink85,
-          fontSize: 16,
-          lineHeight: 1.85,
-          margin: 0,
-          paddingRight: 60,
-        }}
-      >
-        {trajectory}
-      </p>
+      <div style={{ paddingRight: 60 }}>
+        {trajectory
+          .split(/\n{2,}/)
+          .map((para) => para.trim())
+          .filter(Boolean)
+          .map((para, i, arr) => (
+            <p
+              key={i}
+              className="serif"
+              style={{
+                color: theme.ink85,
+                fontSize: 16,
+                lineHeight: 1.85,
+                margin: 0,
+                marginBottom: i < arr.length - 1 ? 16 : 0,
+              }}
+            >
+              {para}
+            </p>
+          ))}
+      </div>
       {stepOutputs && stepOutputs.length > 0 && (
         <div style={{ marginTop: 20 }}>
           <button
