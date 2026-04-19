@@ -205,7 +205,7 @@ describe("useGeneration bullet lifecycle", () => {
       messages: Array<{ content: string }>;
     };
     expect(cleanupRequest.messages[0].content).toContain(
-      "no longer sounds like a paraphrase of a questionnaire"
+      "sounds like it came from a personality test"
     );
     expect(result.current.trajectories[0]).toBe("Cleaned final trajectory");
   });

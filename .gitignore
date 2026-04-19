@@ -1,6 +1,9 @@
 node_modules/
 dist/
 .next/
+*.tsbuildinfo
+.DS_Store
+.vscode/settings.json
 .env
 .env.local
 .wrangler/

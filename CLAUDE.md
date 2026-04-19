@@ -34,7 +34,8 @@ Details below are intentionally not duplicated in the README — they're Claude-
 - [app/page.tsx](app/page.tsx) — UI state machine (`idle → scanning → reviewing → ready → denoising`), daily quota tracking via localStorage. Integrates BulletField + AmmoHUD + FireImpact.
 - [hooks/useGeneration.ts](hooks/useGeneration.ts) — Generation pipeline: prompt construction, fragment-to-bullet conversion, catch/ricochet lifecycle, bullet seed building.
 - [lib/revolver.ts](lib/revolver.ts) — Pure helpers for bullet model: `fragmentToBullet`, `catchBullet`, `ricochetBullet`, `chamberSnapshot`, `buildBulletSeed`.
-- [lib/prompts.ts](lib/prompts.ts) — Prompt templates for each pipeline phase.
+- [lib/prompts.ts](lib/prompts.ts) — Prompt templates for each pipeline phase: scan, structure, critique, sharpen, final (4-paragraph story), cleanup.
+- [lib/styles.ts](lib/styles.ts) — Signature author voice pool; picks an author based on age group and questionnaire affinity scoring.
 - [lib/motion.ts](lib/motion.ts) — Central tuning knobs for Curate-phase animations (Framer Motion springs, durations, kinetic-type sizes).
 - [lib/providers.ts](lib/providers.ts) — Multi-provider LLM client (Anthropic, OpenRouter, xAI); normalizes responses to Anthropic format.
 - [lib/rateLimit.ts](lib/rateLimit.ts) — Upstash Redis-backed per-IP and global daily rate limiting.

@@ -19,12 +19,13 @@ import { TrajectoryCard } from "@/components/TrajectoryCard";
 import { BulletField } from "@/components/BulletField";
 import { AmmoHUD } from "@/components/AmmoHUD";
 import { FireImpact } from "@/components/FireImpact";
-import { buildFieldsFromAnswers } from "@/lib/questionnaire";
+import { buildFieldsFromAnswers, randomizeQuestionnaireAnswers } from "@/lib/questionnaire";
 import { buildStoryConditioning } from "@/lib/prompts";
 import { PROVIDERS, DEFAULT_PROVIDER } from "@/lib/constants";
 import { theme, mono, labelStyles } from "@/lib/theme";
 import { previewBullets } from "@/lib/devPreview";
 import type { CurationAnswers, QuestionnaireAnswers } from "@/types";
+import { REVOLVER_CHAMBERS } from "@/types";
 
 const IS_DEV = process.env.NODE_ENV === "development";
 
@@ -256,6 +257,7 @@ export default function Home() {
   const gen = useGeneration({
     fields,
     big5,
+    questionnaireAnswers,
     curationAnswers,
     guidance,
     denoiseSteps,
@@ -462,6 +464,21 @@ export default function Home() {
             </button>
           ))}
         </nav>
+
+        {IS_DEV && (
+          <div style={{ marginBottom: 16, textAlign: "right" }}>
+            <button
+              onClick={() => {
+                setQuestionnaireAnswers(randomizeQuestionnaireAnswers());
+                setBig5(Array.from({ length: 5 }, () => 1 + Math.floor(Math.random() * 10)));
+                setPage("generate");
+              }}
+              style={{ ...buttonStyles.secondary, fontSize: 10, opacity: 0.7, letterSpacing: 1 }}
+            >
+              ⚡ dev: randomize 01 + 02
+            </button>
+          </div>
+        )}
 
         {page === "input" && (
           <InputForm
@@ -923,6 +940,21 @@ export default function Home() {
                 </span>
               </button>
             )}
+
+            {IS_DEV &&
+              (gen.runPhase === "reviewing" || gen.runPhase === "ready") &&
+              caughtCount < REVOLVER_CHAMBERS && (
+                <button
+                  onClick={gen.catchAll}
+                  disabled={gen.isGenerating}
+                  style={{
+                    ...buttonStyles.secondary,
+                    opacity: gen.isGenerating ? 0.5 : 1,
+                  }}
+                >
+                  <span className="icon-text">[ dev: catch all ]</span>
+                </button>
+              )}
 
             {gen.isGenerating && gen.runPhase === "denoising" && (
               <button
