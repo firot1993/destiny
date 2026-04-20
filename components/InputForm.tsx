@@ -449,6 +449,20 @@ export function InputForm({ answers, onAnswersChange, onNext }: InputFormProps) 
           )}
         </div>
       </div>
+
+      <div
+        style={{
+          marginTop: 24,
+          fontSize: 10,
+          ...mono,
+          color: theme.ink38,
+          letterSpacing: 0.4,
+          textAlign: "center",
+          opacity: 0.72,
+        }}
+      >
+        {t("data_notice")}
+      </div>
     </div>
   );
 }

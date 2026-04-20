@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import {
   ArrowLeft,
   Languages,
@@ -19,6 +19,8 @@ import { TrajectoryCard } from "@/components/TrajectoryCard";
 import { BulletField } from "@/components/BulletField";
 import { AmmoHUD } from "@/components/AmmoHUD";
 import { FireImpact } from "@/components/FireImpact";
+import { StoryRating } from "@/components/StoryRating";
+import { getOrCreateSessionUuid } from "@/lib/sessionId";
 import { buildFieldsFromAnswers, randomizeQuestionnaireAnswers } from "@/lib/questionnaire";
 import { buildStoryConditioning } from "@/lib/prompts";
 import { PROVIDERS, DEFAULT_PROVIDER } from "@/lib/constants";
@@ -245,6 +247,10 @@ export default function Home() {
   const [provider, setProvider] = useState(DEFAULT_PROVIDER);
   const [model, setModel] = useState(PROVIDERS[DEFAULT_PROVIDER][0]);
   const [fireImpactActive, setFireImpactActive] = useState(false);
+  const [sessionUuid, setSessionUuid] = useState<string>("");
+  useEffect(() => {
+    setSessionUuid(getOrCreateSessionUuid());
+  }, []);
   const fields = useMemo(() => buildFieldsFromAnswers(questionnaireAnswers), [questionnaireAnswers]);
   const conditioning = useMemo(
     () => buildStoryConditioning(fields, big5, curationAnswers),
@@ -265,6 +271,7 @@ export default function Home() {
     model,
     lang,
     t,
+    sessionUuid,
   });
 
   const handleFire = useCallback(() => {
@@ -1050,6 +1057,9 @@ export default function Home() {
                     stepOutputs={gen.allStepOutputs[i]}
                   />
                 ))}
+                {gen.runPhase === "complete" && (
+                  <StoryRating sessionId={gen.sessionId} />
+                )}
               </div>
             )}
 

@@ -31,6 +31,26 @@ import {
   DAILY_USAGE_STORAGE_PREFIX,
   API_ROUTE,
 } from "@/lib/constants";
+import { BIG5_KEYS } from "@/lib/constants";
+
+type TelemetryPhase =
+  | "scan"
+  | "structure"
+  | "critique"
+  | "sharpen"
+  | "final"
+  | "cleanup";
+
+const TELEMETRY_ROUTE = "/api/telemetry";
+
+function postTelemetry(body: unknown): Promise<Response> | null {
+  if (typeof window === "undefined") return null;
+  return fetch(TELEMETRY_ROUTE, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  }).catch(() => new Response(null, { status: 0 }));
+}
 
 function getUtcDateKey(): string {
   return new Date().toISOString().slice(0, 10);
@@ -115,6 +135,7 @@ export interface UseGenerationParams {
   model: string;
   lang: string;
   t: (key: string) => string;
+  sessionUuid?: string;
 }
 
 export interface UseGenerationReturn {
@@ -128,6 +149,7 @@ export interface UseGenerationReturn {
   dailyRemaining: number | null;
   dailyLimit: number | null;
   workflowStage: WorkflowStage;
+  sessionId: string | null;
   scanNoiseFragments: () => Promise<void>;
   generate: () => Promise<void>;
   catchBullet: (bulletId: number) => void;
@@ -150,6 +172,7 @@ export function useGeneration({
   model,
   lang,
   t,
+  sessionUuid,
 }: UseGenerationParams): UseGenerationReturn {
   const [isGenerating, setIsGenerating] = useState(false);
   const [runPhase, setRunPhase] = useState<RunPhase>("idle");
@@ -161,6 +184,8 @@ export function useGeneration({
   const [dailyRemaining, setDailyRemaining] = useState<number | null>(null);
   const [dailyLimit, setDailyLimit] = useState<number | null>(null);
   const [dailyUsageDate, setDailyUsageDate] = useState(() => getUtcDateKey());
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const sessionIdRef = useRef<string | null>(null);
   const abortRef = useRef(false);
   const generationLockRef = useRef(false);
   const caughtCount = bullets.filter((b) => b.status === "caught").length;
@@ -202,7 +227,8 @@ export function useGeneration({
   const callModel = async (
     messages: ReturnType<typeof generateStepPrompt>[],
     temperature = 1.0,
-    maxTokens = 1000
+    maxTokens = 1000,
+    telemetryMeta?: { phase: TelemetryPhase; stepIndex?: number }
   ): Promise<string> => {
     const today = getUtcDateKey();
     const currentUsage =
@@ -213,6 +239,15 @@ export function useGeneration({
         ? { remaining: dailyRemaining, limit: dailyLimit }
         : null);
 
+    const telemetry =
+      sessionIdRef.current && telemetryMeta
+        ? {
+            sessionId: sessionIdRef.current,
+            phase: telemetryMeta.phase,
+            stepIndex: telemetryMeta.stepIndex ?? 0,
+          }
+        : undefined;
+
     const res = await fetch(API_ROUTE, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -222,6 +257,7 @@ export function useGeneration({
         max_tokens: maxTokens,
         temperature,
         messages,
+        ...(telemetry ? { telemetry } : {}),
       }),
     });
 
@@ -289,6 +325,42 @@ export function useGeneration({
     abortRef.current = false;
     setCurrentStep(0);
 
+    // Fresh generation attempt → fresh session row. Intentionally await so every
+    // LLM call inside this scan can be tagged with the server-assigned sessionId.
+    sessionIdRef.current = null;
+    setSessionId(null);
+    if (sessionUuid) {
+      try {
+        const bigFivePayload = Object.fromEntries(
+          BIG5_KEYS.map((k, i) => [k, big5[i]])
+        );
+        const res = await postTelemetry({
+          type: "session-start",
+          sessionUuid,
+          language: lang,
+          provider,
+          model,
+          guidance,
+          denoiseSteps,
+          bigFive: bigFivePayload,
+          questionnaireAnswers,
+          normalizedFields: fields,
+          storyConditioning: conditioning,
+        });
+        if (res && res.ok) {
+          const data = (await res.json().catch(() => null)) as
+            | { sessionId?: string }
+            | null;
+          if (data?.sessionId) {
+            sessionIdRef.current = data.sessionId;
+            setSessionId(data.sessionId);
+          }
+        }
+      } catch {
+        // Telemetry must never break generation.
+      }
+    }
+
     try {
       const msg = generateStepPrompt(
         0,
@@ -298,7 +370,10 @@ export function useGeneration({
         null,
         lang
       );
-      const rawNoise = await callModel([msg], 1.15);
+      const rawNoise = await callModel([msg], 1.15, 1000, {
+        phase: "scan",
+        stepIndex: 0,
+      });
 
       if (abortRef.current) {
         setRunPhase("idle");
@@ -395,6 +470,26 @@ export function useGeneration({
     setError(null);
     abortRef.current = false;
 
+    // Record the user's curation choices before kicking off denoise.
+    if (sessionIdRef.current) {
+      postTelemetry({
+        type: "curate-complete",
+        sessionId: sessionIdRef.current,
+        scanFragments: bullets.map((b) => ({
+          id: b.id,
+          text: b.text,
+          status: b.status,
+          passCount: b.passCount,
+          chamberIndex: b.chamberIndex,
+        })),
+        curationAnswers: {
+          whyThese: curationAnswers?.whyThese ?? "",
+          rejectedFuture: curationAnswers?.rejectedFuture ?? "",
+        },
+        authorVoice: signatureStyle.author,
+      });
+    }
+
     try {
       const stepResults: string[] = [mergedNoiseSeed];
       let critiqueNotes: string | null = null;
@@ -420,14 +515,25 @@ export function useGeneration({
         const progress = step / Math.max(1, denoiseSteps - 1);
         const isSharpenStep = step !== 0 && !isFinalStep && progress >= 0.45;
         const stepMaxTokens = isFinalStep ? 3000 : isSharpenStep ? 1800 : 1000;
-        const result = await callModel([msg], 1.05, stepMaxTokens);
+        const phase: TelemetryPhase = isFinalStep
+          ? "final"
+          : isSharpenStep
+          ? "sharpen"
+          : "structure";
+        const result = await callModel([msg], 1.05, stepMaxTokens, {
+          phase,
+          stepIndex: step,
+        });
         stepResults.push(result);
 
         // Critique after the structure step (progress < 0.45).
         const isStructureStep = step !== 0 && !isFinalStep && progress < 0.45;
         if (isStructureStep && !abortRef.current) {
           const critiqueMsg = generateCritiquePrompt(result, conditioning, lang);
-          critiqueNotes = await callModel([critiqueMsg], 0.7, 800);
+          critiqueNotes = await callModel([critiqueMsg], 0.7, 800, {
+            phase: "critique",
+            stepIndex: step,
+          });
         }
       }
 
@@ -436,10 +542,21 @@ export function useGeneration({
           stepResults[stepResults.length - 1],
           lang
         );
-        const cleanedTrajectory = await callModel([cleanupPrompt], 0.8, 3000);
+        const cleanedTrajectory = await callModel([cleanupPrompt], 0.8, 3000, {
+          phase: "cleanup",
+          stepIndex: denoiseSteps,
+        });
         stepResults[stepResults.length - 1] = cleanedTrajectory;
         setTrajectories([cleanedTrajectory]);
         setAllStepOutputs([stepResults]);
+
+        if (sessionIdRef.current) {
+          postTelemetry({
+            type: "story-complete",
+            sessionId: sessionIdRef.current,
+            finalStory: cleanedTrajectory,
+          });
+        }
       }
 
       setRunPhase(abortRef.current ? "ready" : "complete");
@@ -473,6 +590,7 @@ export function useGeneration({
     dailyRemaining,
     dailyLimit,
     workflowStage,
+    sessionId,
     scanNoiseFragments,
     generate,
     catchBullet: catchBulletAction,

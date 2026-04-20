@@ -28,8 +28,9 @@ app/                Next.js App Router (pages + API routes)
 components/         Modular React components (Big5Form, BulletField, AmmoHUD, etc.)
 hooks/              useGeneration.ts — generation pipeline logic
 i18n/               Context-based i18n (English, Chinese, Japanese, Korean)
-lib/                constants, prompts, providers, rateLimit
+lib/                constants, prompts, providers, rateLimit, db, telemetry
 types/              Shared TypeScript types
+supabase/           Local Postgres config + migrations (LLM dataset)
 doc/                Plans, architecture notes, worklogs
 ```
 
@@ -53,6 +54,8 @@ GOOGLE_API_KEY=            # optional
 UPSTASH_REDIS_REST_URL=    # optional — enables rate limiting
 UPSTASH_REDIS_REST_TOKEN=  # optional
 MAX_REQUESTS_PER_DAY=1000  # optional, default 1000
+SUPABASE_URL=              # optional — enables telemetry/persistence
+SUPABASE_SERVICE_ROLE_KEY= # optional
 ```
 
 ## Commands
@@ -64,6 +67,11 @@ npm run start     # run production build locally
 npm run lint      # ESLint
 npm test          # vitest run
 npm run test:watch # vitest watch
+
+npm run db:start  # boot local Postgres + Studio (needs Docker)
+npm run db:reset  # apply supabase/migrations/ to local DB
+npm run db:push   # apply migrations to the linked Supabase project
+npm run db:stop   # stop the local Postgres container
 ```
 
 ## Generation Pipeline
@@ -85,6 +93,30 @@ npm run test:watch # vitest watch
 - **Danganronpa-style Curate** — kinetic typography bullet field, cartridge HUD, cinematic FIRE beat
 - **i18n** — English, Chinese
 
+## Local Database
+
+The app persists questionnaire answers, bullet selections, intermediate LLM calls, final stories, and user ratings to Postgres so we can build a fine-tuning dataset. The schema lives under `supabase/migrations/`.
+
+```bash
+npm run db:start    # requires Docker — boots local Postgres + Studio on localhost
+npm run db:reset    # applies all migrations to the fresh local DB
+```
+
+Copy the printed `service_role` key into `SUPABASE_SERVICE_ROLE_KEY` in `.env.local`. Open Studio at `http://localhost:54323` to browse rows. For production, link the repo to a Supabase cloud project and run `npm run db:push` to promote migrations.
+
+When `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` are unset, the app runs normally — every telemetry call is a silent no-op, matching the behavior of the Upstash rate limiter.
+
+## Data Collection
+
+Destiny captures anonymous generation telemetry to improve prompts and eventually fine-tune the model. Collected per session:
+
+- Questionnaire answers, Big Five scores, guidance/denoise-step settings
+- Every LLM request/response pair across the pipeline (`scan` → `structure` → `critique` → `sharpen` → `final` → `cleanup`)
+- Which noise fragments the user caught, in which chamber order, plus their curation reflection
+- The final story and the user's thumbs-up / thumbs-down rating
+
+Each session is keyed by an anonymous UUID stored in `localStorage` (`destiny-session-uuid`) — **no IP address, no auth, no browser fingerprint**. See `doc/architecture/telemetry-and-persistence.md` for the schema and the SQL query to export a JSONL dataset for fine-tuning.
+
 ## Rate Limiting
 
 Optional, enabled when `UPSTASH_REDIS_REST_URL` is set:
@@ -97,5 +129,6 @@ Optional, enabled when `UPSTASH_REDIS_REST_URL` is set:
 - **Framework**: Next.js (App Router) + React + Framer Motion
 - **LLM providers**: Anthropic, OpenRouter, xAI
 - **Rate limiting**: Upstash Redis
+- **Persistence**: Supabase (Postgres) — optional, for fine-tuning dataset
 - **i18n**: Lightweight React Context (no dependencies)
 - **Testing**: Vitest + React Testing Library
