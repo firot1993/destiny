@@ -1,18 +1,42 @@
 import { NextResponse } from "next/server";
 import { callProvider, ProviderError } from "@/lib/providers";
 import { checkPerIpLimit, checkAndConsumeDaily } from "@/lib/rateLimit";
-import type { LLMRequest } from "@/types";
+import { recordLlmCall, type LlmPhase } from "@/lib/telemetry";
+import type { LLMRequest, Message } from "@/types";
 
 const MAX_REQUESTS_PER_DAY = parseInt(
   process.env.MAX_REQUESTS_PER_DAY ?? "1000",
   10
 );
 
+interface TelemetryMeta {
+  sessionId?: string;
+  phase?: LlmPhase;
+  stepIndex?: number;
+}
+
+type RequestBody = LLMRequest & { telemetry?: TelemetryMeta };
+
 function dailyHeaders(limit: number, remaining: number) {
   return {
     "X-Daily-Limit": String(limit),
     "X-Daily-Remaining": String(Math.max(0, remaining)),
   };
+}
+
+function extractResponseText(response: { content?: Array<{ type: string; text: string }> }): string {
+  if (!response?.content) return "";
+  return response.content
+    .filter((p) => p.type === "text")
+    .map((p) => p.text)
+    .join("\n");
+}
+
+function joinUserPrompt(messages: Message[]): string {
+  return messages
+    .filter((m) => m.role === "user")
+    .map((m) => m.content)
+    .join("\n\n");
 }
 
 export async function POST(request: Request) {
@@ -41,7 +65,7 @@ export async function POST(request: Request) {
     );
   }
 
-  let body: LLMRequest;
+  let body: RequestBody;
   try {
     body = await request.json();
   } catch {
@@ -51,8 +75,36 @@ export async function POST(request: Request) {
     );
   }
 
+  const telemetry = body.telemetry;
+  const providerRequest: LLMRequest = {
+    provider: body.provider,
+    model: body.model,
+    max_tokens: body.max_tokens,
+    temperature: body.temperature,
+    messages: body.messages,
+  };
+
   try {
-    const response = await callProvider(body);
+    const startedAt = Date.now();
+    const response = await callProvider(providerRequest);
+    const latencyMs = Date.now() - startedAt;
+
+    if (telemetry?.sessionId && telemetry.phase) {
+      // Fire-and-forget — never block the user-facing response on DB latency.
+      void recordLlmCall({
+        sessionId: telemetry.sessionId,
+        phase: telemetry.phase,
+        stepIndex: telemetry.stepIndex,
+        userPrompt: joinUserPrompt(providerRequest.messages),
+        responseText: extractResponseText(response),
+        provider: providerRequest.provider,
+        model: providerRequest.model,
+        temperature: providerRequest.temperature,
+        maxTokens: providerRequest.max_tokens,
+        latencyMs,
+      });
+    }
+
     return NextResponse.json(response, {
       status: 200,
       headers: dailyHeaders(daily.limit, daily.remaining),

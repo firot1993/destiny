@@ -125,6 +125,13 @@ const translations: Record<string, Record<string, string>> = {
     curation_why_title: "What made you keep these?",
     curation_reject_title: "Which kind of future did you reject?",
     curation_needed: "Choose what made these fragments stick and what kind of future you refused before firing.",
+
+    // Story rating
+    rate_prompt: "Did this story land for you?",
+    rate_like: "Yes",
+    rate_dislike: "Not really",
+    rate_thanks: "Thanks — this helps us tune the model.",
+    data_notice: "Your answers are stored anonymously to improve future stories.",
   },
 
   zh: {
@@ -233,6 +240,12 @@ const translations: Record<string, Record<string, string>> = {
     curation_why_title: "你为什么留下这些？",
     curation_reject_title: "你拒绝的是哪一种未来？",
     curation_needed: "开火之前，先选出这些碎片为什么留下，以及你拒绝的是哪种未来。",
+
+    rate_prompt: "这个故事打动你了吗？",
+    rate_like: "打动了",
+    rate_dislike: "没太触到",
+    rate_thanks: "谢谢——这会帮助我们调教模型。",
+    data_notice: "你的回答会以匿名方式保存，用于改进未来的故事生成。",
   },
 };
 
