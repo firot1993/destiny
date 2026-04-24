@@ -132,6 +132,24 @@ const translations: Record<string, Record<string, string>> = {
     rate_dislike: "Not really",
     rate_thanks: "Thanks — this helps us tune the model.",
     data_notice: "Your answers are stored anonymously to improve future stories.",
+
+    // Steering (Enhancement 5)
+    steering_title: "Steer the story",
+    steering_hint: "Type a one-line direction for the next revision — or skip to let it run.",
+    steering_placeholder: "e.g. make it darker, focus on the second fragment, less about work...",
+    steering_resume: "Continue",
+    steering_skip: "Skip",
+    steering_countdown: "Auto-continuing in",
+
+    // Quality gate (Enhancement 1)
+    quality_score_label: "Draft quality",
+
+    // Streaming (Enhancement 2)
+    streaming_label: "Writing...",
+
+    // Web search grounding (Enhancement 7)
+    gemini_search_label: "Web search grounding",
+    gemini_search_hint: "Use Google Search to ground story fragments in real-world context (Gemini only)",
   },
 
   zh: {
@@ -246,6 +264,24 @@ const translations: Record<string, Record<string, string>> = {
     rate_dislike: "没太触到",
     rate_thanks: "谢谢——这会帮助我们调教模型。",
     data_notice: "你的回答会以匿名方式保存，用于改进未来的故事生成。",
+
+    // Steering
+    steering_title: "引导故事方向",
+    steering_hint: "输入一行指令来引导下一轮修改——或直接跳过。",
+    steering_placeholder: "例如：更暗一些、聚焦第二个碎片、少一些关于工作的内容...",
+    steering_resume: "继续",
+    steering_skip: "跳过",
+    steering_countdown: "自动继续倒计时",
+
+    // Quality gate
+    quality_score_label: "草稿质量",
+
+    // Streaming
+    streaming_label: "正在撰写...",
+
+    // Web search grounding
+    gemini_search_label: "网络搜索增强",
+    gemini_search_hint: "使用 Google 搜索将故事碎片与真实世界背景结合（仅限 Gemini）",
   },
 };
 
