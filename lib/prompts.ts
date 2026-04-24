@@ -842,7 +842,8 @@ export function generateStepPrompt(
   lang = "en",
   orderedBullets?: string[],
   critiqueNotes?: string | null,
-  signatureAuthor?: string | null
+  signatureAuthor?: string | null,
+  steeringNote?: string | null
 ): Message {
   const langInstruction =
     lang !== "en"
@@ -962,18 +963,21 @@ Respond with only the trajectory draft.${langInstruction}`,
   const critiqueBlock = critiqueNotes
     ? `\nCRITIQUE NOTES (address these in the revision):\n${critiqueNotes}\n`
     : "";
+  const steeringBlock = steeringNote
+    ? `\nUSER DIRECTION (honor this instruction in the revision):\n${steeringNote}\n`
+    : "";
 
   return {
     role: "user",
     content: `You are sharpening a possible life trajectory.
 
 ${context}
-${critiqueBlock}
+${critiqueBlock}${steeringBlock}
 PREVIOUS DRAFT:
 ${prev}
 
 TASK:
-Rewrite and expand the draft into 2-3 paragraphs separated by blank lines, roughly 200-350 words total. Each paragraph 3-6 sentences. Preserve existing images and motifs; do not add new themes. Replace any sentence that feels like a summary or explanation with a concrete detail or overheard moment. Break uniform literary tone — let at least one sentence be plainly stated, offhand, or slightly banal. Leave at least one thing unexplained. Do not label paragraphs.${critiqueNotes ? " Prioritize addressing the critique notes above." : ""}
+Rewrite and expand the draft into 2-3 paragraphs separated by blank lines, roughly 200-350 words total. Each paragraph 3-6 sentences. Preserve existing images and motifs; do not add new themes. Replace any sentence that feels like a summary or explanation with a concrete detail or overheard moment. Break uniform literary tone — let at least one sentence be plainly stated, offhand, or slightly banal. Leave at least one thing unexplained. Do not label paragraphs.${critiqueNotes ? " Prioritize addressing the critique notes above." : ""}${steeringNote ? " Also honor the user direction above." : ""}
 
 Rules:
 ${SHARED_RULES}
@@ -1058,4 +1062,153 @@ export function parseNoiseFragments(rawText: string): string[] {
     })
     .filter(Boolean)
     .slice(0, NOISE_SCAN_COUNT);
+}
+
+// ---------------------------------------------------------------------------
+// Enhancement 1: Adaptive Quality Gate
+// ---------------------------------------------------------------------------
+
+export interface QualityGateResult {
+  score: number;
+  shouldContinue: boolean;
+}
+
+export function generateQualityGatePrompt(
+  draft: string,
+  conditioning: StoryConditioning,
+  lang = "en"
+): Message {
+  const langInstruction =
+    lang !== "en"
+      ? `\n\nRespond in ${LANG_NAMES[lang] || lang}.`
+      : "";
+  const context = formatConditioning(conditioning);
+  return {
+    role: "user",
+    content: `You are a concise quality evaluator for a possible-futures story draft.
+
+${context}
+
+DRAFT:
+${draft}
+
+Score the draft on a scale from 1-10 across these dimensions, then output a single overall score:
+- Concreteness: Does the draft use specific nouns, places, objects instead of abstractions?
+- Texture: Is there variation in register (plain sentences mixed with charged ones)?
+- Questionnaire invisibility: Would a reader be unable to reverse-engineer the questionnaire?
+- Narrative causality: Does the story cause itself forward rather than listing parallel events?
+- Emotional charge: Does it feel alive, unfinished, and real?
+
+Output ONLY a single line in this exact format:
+SCORE: <number 1-10>
+
+Do not add explanation, praise, or any other text.${langInstruction}`,
+  };
+}
+
+export function parseQualityGateScore(rawText: string): QualityGateResult {
+  const match = rawText.match(/SCORE:\s*(\d+)/i);
+  const score = match ? Math.min(10, Math.max(1, parseInt(match[1], 10))) : 5;
+  return { score, shouldContinue: score < 7 };
+}
+
+// ---------------------------------------------------------------------------
+// Enhancement 3: Multi-Round Critique — Revision Verification
+// ---------------------------------------------------------------------------
+
+export function generateRevisionVerificationPrompt(
+  revisedDraft: string,
+  originalCritiqueNotes: string,
+  lang = "en"
+): Message {
+  const langInstruction =
+    lang !== "en"
+      ? `\n\nRespond in ${LANG_NAMES[lang] || lang}.`
+      : "";
+  return {
+    role: "user",
+    content: `You are a revision verifier. Check whether the revised draft addressed the critique notes from the previous round.
+
+ORIGINAL CRITIQUE NOTES:
+${originalCritiqueNotes}
+
+REVISED DRAFT:
+${revisedDraft}
+
+For each critique note, determine if it was addressed. If any notes were NOT addressed, output targeted fix instructions.
+
+If ALL notes were addressed, respond with exactly:
+REVISION_OK
+
+If some notes were NOT addressed, respond with:
+UNRESOLVED:
+- <specific fix instruction for unresolved note 1>
+- <specific fix instruction for unresolved note 2>
+
+Keep fix instructions short and concrete. Do not re-critique new issues — only check the original notes.${langInstruction}`,
+  };
+}
+
+export function parseRevisionVerification(rawText: string): {
+  allResolved: boolean;
+  unresolvedNotes: string | null;
+} {
+  const trimmed = rawText.trim();
+  if (trimmed.startsWith("REVISION_OK")) {
+    return { allResolved: true, unresolvedNotes: null };
+  }
+  const unresolvedMatch = trimmed.match(/UNRESOLVED:\s*([\s\S]+)/i);
+  return {
+    allResolved: false,
+    unresolvedNotes: unresolvedMatch ? unresolvedMatch[1].trim() : trimmed,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Enhancement 6: Scan Diversity Check
+// ---------------------------------------------------------------------------
+
+export function generateDiversityCheckPrompt(
+  fragments: string[],
+  lang = "en"
+): Message {
+  const langInstruction =
+    lang !== "en"
+      ? `\n\nRespond in ${LANG_NAMES[lang] || lang}.`
+      : "";
+  const numbered = fragments.map((f, i) => `${i + 1}:: ${f}`).join("\n");
+  return {
+    role: "user",
+    content: `You are checking a set of story fragments for thematic diversity.
+
+FRAGMENTS:
+${numbered}
+
+Check for near-duplicate or thematically overlapping fragments. Two fragments overlap if they express essentially the same future scenario, emotion, or image with only minor wording differences.
+
+If ALL fragments are sufficiently distinct, respond with exactly:
+DIVERSE_OK
+
+If some fragments are too similar, list the indices that should be REPLACED (keep the stronger one from each pair), in this format:
+REPLACE: 3, 7, 9
+
+Only flag true near-duplicates. Fragments that share a broad theme (e.g., both mention work) but express different scenes or tensions are NOT duplicates.${langInstruction}`,
+  };
+}
+
+export function parseDiversityCheck(rawText: string): {
+  isDiverse: boolean;
+  replaceIndices: number[];
+} {
+  const trimmed = rawText.trim();
+  if (trimmed.startsWith("DIVERSE_OK")) {
+    return { isDiverse: true, replaceIndices: [] };
+  }
+  const replaceMatch = trimmed.match(/REPLACE:\s*([\d,\s]+)/i);
+  if (!replaceMatch) return { isDiverse: true, replaceIndices: [] };
+  const indices = replaceMatch[1]
+    .split(",")
+    .map((s) => parseInt(s.trim(), 10))
+    .filter((n) => Number.isFinite(n) && n >= 1);
+  return { isDiverse: indices.length === 0, replaceIndices: indices };
 }
