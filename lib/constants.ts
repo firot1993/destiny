@@ -29,15 +29,12 @@ export const STREAMING_API_ROUTE = "/api/generate/stream";
  * Fallback provider chain — tried in order when the primary provider fails
  * with a retryable error. Configurable via env at build time.
  */
-export const FALLBACK_PROVIDERS: string[] = (() => {
-  const env = typeof process !== "undefined"
-    ? (process.env?.NEXT_PUBLIC_FALLBACK_PROVIDERS ?? "")
-    : "";
-  return env
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-})();
+export const FALLBACK_PROVIDERS: string[] = (
+  process.env.NEXT_PUBLIC_FALLBACK_PROVIDERS ?? ""
+)
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
 
 /** Maximum retry attempts per LLM call (exponential backoff). */
 export const MAX_RETRIES = 2;

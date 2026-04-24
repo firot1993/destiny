@@ -706,29 +706,38 @@ export function useGeneration({
           // Pause to let the user optionally type a steering note
           setRunPhase("steering");
           await new Promise<void>((resolve) => {
-            steeringResolveRef.current = resolve;
-
-            // Auto-resume after 15 seconds if the user doesn't interact
-            const timer = setTimeout(() => {
-              if (steeringResolveRef.current === resolve) {
+            let resolved = false;
+            const doResolve = () => {
+              if (!resolved) {
+                resolved = true;
+                clearTimeout(timer);
                 steeringResolveRef.current = null;
                 resolve();
               }
-            }, 15_000);
-
-            // Also resolve immediately if we get resumed via the button
-            const checkAbort = () => {
-              if (abortRef.current) {
-                clearTimeout(timer);
-                resolve();
-              }
             };
-            // Check once quickly
-            setTimeout(checkAbort, 100);
+
+            steeringResolveRef.current = doResolve;
+
+            // Auto-resume after 15 seconds if the user doesn't interact
+            const timer = setTimeout(doResolve, 15_000);
+
+            // Also resolve if aborted
+            if (abortRef.current) doResolve();
           });
 
-          // Capture the steering note the user typed during the pause
-          currentSteeringNote = steeringNote.trim() || null;
+          // Capture the steering note the user typed during the pause.
+          // Sanitize: limit length and strip common prompt-injection patterns.
+          const rawNote = steeringNote.trim();
+          if (rawNote) {
+            const sanitized = rawNote
+              .slice(0, 200)
+              .replace(/ignore (all )?(previous|prior|above) (instructions?|prompts?|rules?)/gi, "")
+              .replace(/system\s*:/gi, "")
+              .trim();
+            currentSteeringNote = sanitized || null;
+          } else {
+            currentSteeringNote = null;
+          }
           if (!abortRef.current) setRunPhase("denoising");
         }
 

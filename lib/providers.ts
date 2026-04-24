@@ -60,7 +60,7 @@ export class ProviderError extends Error {
 
 /** Whether an error status code is retryable (server errors and rate limits). */
 function isRetryable(status: number): boolean {
-  return status === 429 || status === 502 || status === 503 || status === 504 || status >= 500;
+  return status === 429 || status >= 500;
 }
 
 /** Sleep for the given number of milliseconds. */
