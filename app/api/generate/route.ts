@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { callProvider, ProviderError } from "@/lib/providers";
+import { callProviderWithFallbacks, ProviderError, callProviderStreaming } from "@/lib/providers";
 import { checkPerIpLimit, checkAndConsumeDaily } from "@/lib/rateLimit";
 import { recordLlmCall, type LlmPhase } from "@/lib/telemetry";
+import { FALLBACK_PROVIDERS } from "@/lib/constants";
 import type { LLMRequest, Message } from "@/types";
 
 const MAX_REQUESTS_PER_DAY = parseInt(
@@ -15,7 +16,11 @@ interface TelemetryMeta {
   stepIndex?: number;
 }
 
-type RequestBody = LLMRequest & { telemetry?: TelemetryMeta };
+type RequestBody = LLMRequest & {
+  telemetry?: TelemetryMeta;
+  stream?: boolean;
+  enableGeminiSearch?: boolean;
+};
 
 function dailyHeaders(limit: number, remaining: number) {
   return {
@@ -84,9 +89,61 @@ export async function POST(request: Request) {
     messages: body.messages,
   };
 
+  // ---------------------------------------------------------------------------
+  // Streaming path (Enhancement 2)
+  // ---------------------------------------------------------------------------
+  if (body.stream) {
+    try {
+      const upstreamRes = await callProviderStreaming(providerRequest);
+
+      if (!upstreamRes || !upstreamRes.body) {
+        // Streaming not supported for this provider — fall back to non-streaming
+        const response = await callProviderWithFallbacks(
+          providerRequest,
+          FALLBACK_PROVIDERS,
+          { enableGeminiSearch: body.enableGeminiSearch }
+        );
+        return NextResponse.json(response, {
+          status: 200,
+          headers: dailyHeaders(daily.limit, daily.remaining),
+        });
+      }
+
+      // Forward SSE stream to client
+      return new Response(upstreamRes.body, {
+        status: 200,
+        headers: {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          Connection: "keep-alive",
+          ...dailyHeaders(daily.limit, daily.remaining),
+        },
+      });
+    } catch (err) {
+      if (err instanceof ProviderError) {
+        return NextResponse.json(
+          { error: err.message },
+          { status: err.status, headers: dailyHeaders(daily.limit, daily.remaining) }
+        );
+      }
+      const message = err instanceof Error ? err.message : "Internal server error";
+      return NextResponse.json(
+        { error: message },
+        { status: 500, headers: dailyHeaders(daily.limit, daily.remaining) }
+      );
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Standard non-streaming path (with retry + fallback)
+  // ---------------------------------------------------------------------------
   try {
     const startedAt = Date.now();
-    const response = await callProvider(providerRequest);
+    const response = await callProviderWithFallbacks(
+      providerRequest,
+      FALLBACK_PROVIDERS,
+      { enableGeminiSearch: body.enableGeminiSearch }
+    );
     const latencyMs = Date.now() - startedAt;
 
     if (telemetry?.sessionId && telemetry.phase) {

@@ -23,3 +23,30 @@ export const BIG5_KEYS = [
 export const NOISE_SCAN_COUNT = 10;
 export const DAILY_USAGE_STORAGE_PREFIX = "destiny-daily-usage";
 export const API_ROUTE = "/api/generate";
+export const STREAMING_API_ROUTE = "/api/generate/stream";
+
+/**
+ * Fallback provider chain — tried in order when the primary provider fails
+ * with a retryable error. Configurable via env at build time.
+ */
+export const FALLBACK_PROVIDERS: string[] = (
+  process.env.NEXT_PUBLIC_FALLBACK_PROVIDERS ?? ""
+)
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+/** Maximum retry attempts per LLM call (exponential backoff). */
+export const MAX_RETRIES = 2;
+
+/** Base delay in ms for exponential backoff between retries. */
+export const RETRY_BASE_DELAY_MS = 1000;
+
+/** Quality gate score threshold — drafts scoring at or above skip extra sharpen passes. */
+export const QUALITY_GATE_THRESHOLD = 7;
+
+/** Maximum extra sharpen passes the adaptive loop may add. */
+export const MAX_EXTRA_SHARPEN_PASSES = 2;
+
+/** Whether Gemini web-search grounding is enabled by default. */
+export const GEMINI_SEARCH_GROUNDING_DEFAULT = false;

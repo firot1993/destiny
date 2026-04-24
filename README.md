@@ -65,6 +65,9 @@ MAX_REQUESTS_PER_DAY=1000  # optional, defaults to 1000
 
 SUPABASE_URL=              # optional, enables telemetry/persistence
 SUPABASE_SERVICE_ROLE_KEY= # optional
+
+# Agentic pipeline configuration
+NEXT_PUBLIC_FALLBACK_PROVIDERS=  # optional, comma-separated fallback provider chain (e.g. "anthropic,xai")
 ```
 
 ## Commands
@@ -113,20 +116,32 @@ docs/superpowers/   Skill-generated specs/plans from prior sessions
 3. `Scan`  
    Step `0` in `generateStepPrompt(...)` asks the model for 10 unresolved future fragments. `parseNoiseFragments(...)` converts the raw response into bullets.
 
-4. `Curate`  
+4. `Diversity Check`  
+   After the scan, `generateDiversityCheckPrompt(...)` scores the 10 fragments for thematic overlap. Near-duplicates are replaced via a single re-scan pass. This is best-effort and never blocks the user.
+
+5. `Curate`  
    `BulletField` and `AmmoHUD` let the user catch up to 6 fragments into the revolver chamber. The user then answers `whyThese` and `rejectedFuture` before firing.
 
-5. `Denoise`  
-   `useGeneration.ts` runs a staged rewrite loop:
-   - structure
-   - critique
-   - sharpen/refine
-   - final story
+6. `Denoise` (adaptive agentic loop)  
+   `useGeneration.ts` runs a staged rewrite loop with self-assessment:
+   - **structure** — initial draft from selected fragments
+   - **critique** — identifies weaknesses in the structure draft
+   - **steering pause** — user can optionally type a one-line direction (auto-skips after 15s)
+   - **sharpen/refine** — rewrites addressing critique notes + optional steering note
+   - **revision verification** — checks if sharpen addressed the critique; runs a targeted fix pass if not
+   - **quality gate** — scores the draft 1-10; triggers extra sharpen passes if below threshold (max 2 extra)
+   - **final story** — full 4-paragraph story (streamed via SSE when provider supports it)
 
    The hook also injects ordered bullet text plus a signature author chosen by `lib/styles.ts`.
 
-6. `Cleanup`  
+7. `Cleanup`  
    A final cleanup prompt strips obvious questionnaire language and keeps the finished trajectory concrete.
+
+## Reliability
+
+- **Retry with backoff** — Every upstream LLM call retries up to 2 times with exponential backoff on 429/5xx errors.
+- **Fallback providers** — `NEXT_PUBLIC_FALLBACK_PROVIDERS` (comma-separated) defines a fallback chain tried when the primary provider fails with a retryable error.
+- **Streaming** — The final story step streams via SSE for OpenRouter and xAI, showing words as they arrive. Falls back to non-streaming for unsupported providers.
 
 ## Persistence And Telemetry
 
@@ -168,7 +183,11 @@ Optional, enabled when `UPSTASH_REDIS_REST_URL` is set:
 - The questionnaire is chapter-based, not a plain profile form.
 - Big Five scores affect behavior and tone, not just labels.
 - The curate phase is a real user choice point, not a cosmetic animation.
-- The final output is a literary future narrative shaped by a multi-pass rewrite loop.
+- The denoise pipeline is an adaptive agentic loop — it self-assesses draft quality, runs multi-round critique, and accepts mid-generation user steering.
+- Scan fragments go through a diversity check to avoid near-duplicates in the revolver.
+- The final output is a literary future narrative shaped by a multi-pass rewrite loop with streaming support.
+- LLM calls retry with exponential backoff and fall through to configured fallback providers.
+- Gemini's web search grounding can be toggled on for real-world-anchored story fragments.
 - Users can rate the finished story with a simple like/dislike control.
 - Current i18n support is English and Simplified Chinese.
 

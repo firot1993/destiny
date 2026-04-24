@@ -108,7 +108,19 @@ export interface StoryConditioning {
   };
 }
 
-export type RunPhase = "idle" | "scanning" | "reviewing" | "ready" | "denoising" | "complete";
+export type RunPhase =
+  | "idle"
+  | "scanning"
+  | "reviewing"
+  | "ready"
+  | "steering"     // paused after structure for mid-generation steering
+  | "denoising"
+  | "complete";
 export type WorkflowStage = "scan" | "curate" | "denoise";
 export type Language = "en" | "zh";
 export type QuestionnaireAnswers = Record<string, string[]>;
+
+/** Streaming request body extends the normal LLM request with a stream flag. */
+export interface StreamingLLMRequest extends LLMRequest {
+  stream?: boolean;
+}

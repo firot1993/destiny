@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import type {
   CurationAnswers,
   Fields,
@@ -22,6 +22,12 @@ import {
   generateStepPrompt,
   generateCleanupPrompt,
   generateCritiquePrompt,
+  generateQualityGatePrompt,
+  parseQualityGateScore,
+  generateRevisionVerificationPrompt,
+  parseRevisionVerification,
+  generateDiversityCheckPrompt,
+  parseDiversityCheck,
   extractNormalizedText,
   parseNoiseFragments,
 } from "@/lib/prompts";
@@ -30,6 +36,8 @@ import { pickSignatureStyle } from "@/lib/styles";
 import {
   DAILY_USAGE_STORAGE_PREFIX,
   API_ROUTE,
+  QUALITY_GATE_THRESHOLD,
+  MAX_EXTRA_SHARPEN_PASSES,
 } from "@/lib/constants";
 import { BIG5_KEYS } from "@/lib/constants";
 
@@ -39,7 +47,11 @@ type TelemetryPhase =
   | "critique"
   | "sharpen"
   | "final"
-  | "cleanup";
+  | "cleanup"
+  | "quality_gate"
+  | "revision_verify"
+  | "diversity_check"
+  | "scan_rescan";
 
 const TELEMETRY_ROUTE = "/api/telemetry";
 
@@ -136,6 +148,7 @@ export interface UseGenerationParams {
   lang: string;
   t: (key: string) => string;
   sessionUuid?: string;
+  enableGeminiSearch?: boolean;
 }
 
 export interface UseGenerationReturn {
@@ -150,6 +163,15 @@ export interface UseGenerationReturn {
   dailyLimit: number | null;
   workflowStage: WorkflowStage;
   sessionId: string | null;
+  /** Streaming text accumulated so far during the final/cleanup step */
+  streamingText: string;
+  /** The latest quality gate score from the adaptive loop (0 if not yet run) */
+  lastQualityScore: number;
+  /** Pending steering note — set externally to inject direction before sharpen */
+  steeringNote: string;
+  setSteeringNote: (note: string) => void;
+  /** Resume generation after the steering pause */
+  resumeFromSteering: () => void;
   scanNoiseFragments: () => Promise<void>;
   generate: () => Promise<void>;
   catchBullet: (bulletId: number) => void;
@@ -173,6 +195,7 @@ export function useGeneration({
   lang,
   t,
   sessionUuid,
+  enableGeminiSearch,
 }: UseGenerationParams): UseGenerationReturn {
   const [isGenerating, setIsGenerating] = useState(false);
   const [runPhase, setRunPhase] = useState<RunPhase>("idle");
@@ -185,9 +208,14 @@ export function useGeneration({
   const [dailyLimit, setDailyLimit] = useState<number | null>(null);
   const [dailyUsageDate, setDailyUsageDate] = useState(() => getUtcDateKey());
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [streamingText, setStreamingText] = useState("");
+  const [lastQualityScore, setLastQualityScore] = useState(0);
+  const [steeringNote, setSteeringNote] = useState("");
   const sessionIdRef = useRef<string | null>(null);
   const abortRef = useRef(false);
   const generationLockRef = useRef(false);
+  // Steering pause mechanism: resolve this promise to resume generation
+  const steeringResolveRef = useRef<(() => void) | null>(null);
   const caughtCount = bullets.filter((b) => b.status === "caught").length;
   const activeBulletsCount = bullets.filter(
     (b) => b.status === "flying" || b.status === "ricocheting"
@@ -228,7 +256,8 @@ export function useGeneration({
     messages: ReturnType<typeof generateStepPrompt>[],
     temperature = 1.0,
     maxTokens = 1000,
-    telemetryMeta?: { phase: TelemetryPhase; stepIndex?: number }
+    telemetryMeta?: { phase: TelemetryPhase; stepIndex?: number },
+    opts?: { stream?: boolean }
   ): Promise<string> => {
     const today = getUtcDateKey();
     const currentUsage =
@@ -248,6 +277,8 @@ export function useGeneration({
           }
         : undefined;
 
+    const shouldStream = opts?.stream === true;
+
     const res = await fetch(API_ROUTE, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -258,6 +289,8 @@ export function useGeneration({
         temperature,
         messages,
         ...(telemetry ? { telemetry } : {}),
+        ...(shouldStream ? { stream: true } : {}),
+        ...(enableGeminiSearch !== undefined ? { enableGeminiSearch } : {}),
       }),
     });
 
@@ -289,6 +322,53 @@ export function useGeneration({
       throw new Error(`API ${res.status}: ${message.slice(0, 200)}`);
     }
 
+    // ---------------------------------------------------------------------------
+    // Streaming response path (Enhancement 2)
+    // ---------------------------------------------------------------------------
+    if (shouldStream && res.headers.get("Content-Type")?.includes("text/event-stream") && res.body) {
+      let fullText = "";
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+
+      try {
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value, { stream: true });
+          // Parse SSE lines for OpenAI-compat format
+          const lines = chunk.split("\n");
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              const data = line.slice(6).trim();
+              if (data === "[DONE]") continue;
+              try {
+                const parsed = JSON.parse(data) as {
+                  choices?: Array<{ delta?: { content?: string } }>;
+                };
+                const delta = parsed?.choices?.[0]?.delta?.content;
+                if (delta) {
+                  fullText += delta;
+                  setStreamingText(fullText);
+                }
+              } catch {
+                // Ignore malformed SSE lines
+              }
+            }
+          }
+        }
+      } finally {
+        reader.releaseLock();
+      }
+
+      if (!fullText) throw new Error("Streaming API returned no text content.");
+      return fullText;
+    }
+
+    // ---------------------------------------------------------------------------
+    // Standard JSON response path
+    // ---------------------------------------------------------------------------
     const data = await res.json() as {
       error?: unknown;
       content?: Array<{ type: string; text: string }>;
@@ -312,6 +392,9 @@ export function useGeneration({
     setAllStepOutputs([]);
   };
 
+  // ---------------------------------------------------------------------------
+  // Enhancement 6: Scan with diversity check
+  // ---------------------------------------------------------------------------
   const scanNoiseFragments = async () => {
     if (generationLockRef.current) return;
     generationLockRef.current = true;
@@ -322,11 +405,13 @@ export function useGeneration({
     setBullets([]);
     clearDenoisedOutputs();
     setError(null);
+    setStreamingText("");
+    setLastQualityScore(0);
+    setSteeringNote("");
     abortRef.current = false;
     setCurrentStep(0);
 
-    // Fresh generation attempt → fresh session row. Intentionally await so every
-    // LLM call inside this scan can be tagged with the server-assigned sessionId.
+    // Fresh generation attempt → fresh session row.
     sessionIdRef.current = null;
     setSessionId(null);
     if (sessionUuid) {
@@ -380,9 +465,60 @@ export function useGeneration({
         return;
       }
 
-      const parsedNoise = parseNoiseFragments(rawNoise);
+      let parsedNoise = parseNoiseFragments(rawNoise);
       if (parsedNoise.length === 0) {
         throw new Error("Noise scan returned no usable fragments.");
+      }
+
+      // Enhancement 6: Diversity check — score fragments for thematic overlap
+      if (parsedNoise.length >= 4 && !abortRef.current) {
+        try {
+          const diversityMsg = generateDiversityCheckPrompt(parsedNoise, lang);
+          const diversityRaw = await callModel([diversityMsg], 0.5, 400, {
+            phase: "diversity_check",
+            stepIndex: 0,
+          });
+          const diversityResult = parseDiversityCheck(diversityRaw);
+
+          if (
+            !diversityResult.isDiverse &&
+            diversityResult.replaceIndices.length > 0 &&
+            !abortRef.current
+          ) {
+            // Re-scan only the duplicate slots (up to 1 retry)
+            const replacementCount = diversityResult.replaceIndices.length;
+            const rescanMsg = generateStepPrompt(
+              0,
+              denoiseSteps,
+              conditioning,
+              guidance,
+              null,
+              lang
+            );
+            const rescanRaw = await callModel([rescanMsg], 1.25, 1000, {
+              phase: "scan_rescan",
+              stepIndex: 0,
+            });
+            const rescanFragments = parseNoiseFragments(rescanRaw);
+
+            // Replace flagged indices with fresh fragments
+            if (rescanFragments.length > 0) {
+              let rescanIdx = 0;
+              parsedNoise = parsedNoise.map((frag, i) => {
+                if (
+                  diversityResult.replaceIndices.includes(i + 1) &&
+                  rescanIdx < rescanFragments.length &&
+                  rescanIdx < replacementCount
+                ) {
+                  return rescanFragments[rescanIdx++];
+                }
+                return frag;
+              });
+            }
+          }
+        } catch {
+          // Diversity check is best-effort — don't fail the scan
+        }
       }
 
       const scanned: NoiseFragment[] = parsedNoise.map((text, i) => ({ id: i + 1, text }));
@@ -449,6 +585,19 @@ export function useGeneration({
     setRunPhase("reviewing");
   };
 
+  // ---------------------------------------------------------------------------
+  // Enhancement 5: Resume from steering pause
+  // ---------------------------------------------------------------------------
+  const resumeFromSteering = useCallback(() => {
+    if (steeringResolveRef.current) {
+      steeringResolveRef.current();
+      steeringResolveRef.current = null;
+    }
+  }, []);
+
+  // ---------------------------------------------------------------------------
+  // Main denoise generation with all agentic enhancements
+  // ---------------------------------------------------------------------------
   const generate = async () => {
     if (generationLockRef.current || bullets.filter((b) => b.status === "caught").length === 0) return;
     generationLockRef.current = true;
@@ -468,6 +617,8 @@ export function useGeneration({
     setRunPhase("denoising");
     clearDenoisedOutputs();
     setError(null);
+    setStreamingText("");
+    setLastQualityScore(0);
     abortRef.current = false;
 
     // Record the user's curation choices before kicking off denoise.
@@ -493,10 +644,18 @@ export function useGeneration({
     try {
       const stepResults: string[] = [mergedNoiseSeed];
       let critiqueNotes: string | null = null;
+      let currentSteeringNote: string | null = null;
+      let extraSharpenPasses = 0;
 
       for (let step = 1; step < denoiseSteps; step++) {
         if (abortRef.current) break;
         setCurrentStep(step);
+
+        const isFinalStep = step === denoiseSteps - 1;
+        const progress = step / Math.max(1, denoiseSteps - 1);
+        const isSharpenStep = step !== 0 && !isFinalStep && progress >= 0.45;
+        const isStructureStep = step !== 0 && !isFinalStep && progress < 0.45;
+
         const msg = generateStepPrompt(
           step,
           denoiseSteps,
@@ -506,28 +665,32 @@ export function useGeneration({
           lang,
           orderedBulletTexts,
           critiqueNotes,
-          signatureStyle.author
+          signatureStyle.author,
+          currentSteeringNote
         );
-        // Final step produces the full 4-paragraph story; sharpen produces 2-3
-        // paragraphs. Give them enough headroom (esp. for CJK, which tokenizes
-        // more densely than English).
-        const isFinalStep = step === denoiseSteps - 1;
-        const progress = step / Math.max(1, denoiseSteps - 1);
-        const isSharpenStep = step !== 0 && !isFinalStep && progress >= 0.45;
+
         const stepMaxTokens = isFinalStep ? 3000 : isSharpenStep ? 1800 : 1000;
         const phase: TelemetryPhase = isFinalStep
           ? "final"
           : isSharpenStep
           ? "sharpen"
           : "structure";
+
+        // Use streaming for the final step (Enhancement 2)
+        const useStreaming = isFinalStep;
+
         const result = await callModel([msg], 1.05, stepMaxTokens, {
           phase,
           stepIndex: step,
-        });
+        }, { stream: useStreaming });
         stepResults.push(result);
 
-        // Critique after the structure step (progress < 0.45).
-        const isStructureStep = step !== 0 && !isFinalStep && progress < 0.45;
+        // Clear streaming text after step completes
+        if (useStreaming) setStreamingText("");
+
+        // -----------------------------------------------------------------------
+        // Enhancement 3: Critique after the structure step
+        // -----------------------------------------------------------------------
         if (isStructureStep && !abortRef.current) {
           const critiqueMsg = generateCritiquePrompt(result, conditioning, lang);
           critiqueNotes = await callModel([critiqueMsg], 0.7, 800, {
@@ -535,8 +698,141 @@ export function useGeneration({
             stepIndex: step,
           });
         }
+
+        // -----------------------------------------------------------------------
+        // Enhancement 5: Steering pause after structure step
+        // -----------------------------------------------------------------------
+        if (isStructureStep && !abortRef.current && !isFinalStep) {
+          // Pause to let the user optionally type a steering note
+          setRunPhase("steering");
+          await new Promise<void>((resolve) => {
+            let resolved = false;
+            const doResolve = () => {
+              if (!resolved) {
+                resolved = true;
+                clearTimeout(timer);
+                steeringResolveRef.current = null;
+                resolve();
+              }
+            };
+
+            steeringResolveRef.current = doResolve;
+
+            // Auto-resume after 15 seconds if the user doesn't interact
+            const timer = setTimeout(doResolve, 15_000);
+
+            // Also resolve if aborted
+            if (abortRef.current) doResolve();
+          });
+
+          // Capture the steering note the user typed during the pause.
+          // Sanitize: limit length and strip common prompt-injection patterns.
+          const rawNote = steeringNote.trim();
+          if (rawNote) {
+            const sanitized = rawNote
+              .slice(0, 200)
+              .replace(/ignore (all )?(previous|prior|above) (instructions?|prompts?|rules?)/gi, "")
+              .replace(/system\s*:/gi, "")
+              .trim();
+            currentSteeringNote = sanitized || null;
+          } else {
+            currentSteeringNote = null;
+          }
+          if (!abortRef.current) setRunPhase("denoising");
+        }
+
+        // -----------------------------------------------------------------------
+        // Enhancement 3: Multi-round critique — verify revision after sharpen
+        // -----------------------------------------------------------------------
+        if (isSharpenStep && critiqueNotes && !abortRef.current) {
+          try {
+            const verifyMsg = generateRevisionVerificationPrompt(
+              result,
+              critiqueNotes,
+              lang
+            );
+            const verifyRaw = await callModel([verifyMsg], 0.5, 600, {
+              phase: "revision_verify",
+              stepIndex: step,
+            });
+            const verifyResult = parseRevisionVerification(verifyRaw);
+
+            if (!verifyResult.allResolved && verifyResult.unresolvedNotes) {
+              // Run one more targeted fix pass
+              const fixMsg = generateStepPrompt(
+                step,
+                denoiseSteps,
+                conditioning,
+                guidance,
+                result,
+                lang,
+                orderedBulletTexts,
+                verifyResult.unresolvedNotes,
+                signatureStyle.author,
+                currentSteeringNote
+              );
+              const fixResult = await callModel([fixMsg], 1.0, 1800, {
+                phase: "sharpen",
+                stepIndex: step,
+              });
+              stepResults[stepResults.length - 1] = fixResult;
+            }
+          } catch {
+            // Revision verification is best-effort
+          }
+          // Clear critique notes after sharpen to avoid double-injection
+          critiqueNotes = null;
+        }
+
+        // -----------------------------------------------------------------------
+        // Enhancement 1: Adaptive quality gate after sharpen
+        // -----------------------------------------------------------------------
+        if (
+          isSharpenStep &&
+          !isFinalStep &&
+          !abortRef.current &&
+          extraSharpenPasses < MAX_EXTRA_SHARPEN_PASSES
+        ) {
+          try {
+            const latestDraft = stepResults[stepResults.length - 1];
+            const gateMsg = generateQualityGatePrompt(latestDraft, conditioning, lang);
+            const gateRaw = await callModel([gateMsg], 0.3, 100, {
+              phase: "quality_gate",
+              stepIndex: step,
+            });
+            const gateResult = parseQualityGateScore(gateRaw);
+            setLastQualityScore(gateResult.score);
+
+            if (gateResult.shouldContinue && gateResult.score < QUALITY_GATE_THRESHOLD) {
+              // Add an extra sharpen pass — the draft needs more work
+              extraSharpenPasses++;
+              const extraMsg = generateStepPrompt(
+                step,
+                denoiseSteps,
+                conditioning,
+                guidance,
+                latestDraft,
+                lang,
+                orderedBulletTexts,
+                null,
+                signatureStyle.author,
+                currentSteeringNote
+              );
+              const extraResult = await callModel([extraMsg], 1.1, 1800, {
+                phase: "sharpen",
+                stepIndex: step,
+              });
+              stepResults[stepResults.length - 1] = extraResult;
+            }
+          } catch {
+            // Quality gate is best-effort — don't fail generation
+          }
+        }
       }
 
+      // -------------------------------------------------------------------------
+      // Cleanup pass
+      // -------------------------------------------------------------------------
       if (!abortRef.current && stepResults.length > 0) {
         const cleanupPrompt = generateCleanupPrompt(
           stepResults[stepResults.length - 1],
@@ -567,6 +863,7 @@ export function useGeneration({
       generationLockRef.current = false;
       setIsGenerating(false);
       setCurrentStep(0);
+      setStreamingText("");
     }
   };
 
@@ -575,7 +872,7 @@ export function useGeneration({
       ? "scan"
       : runPhase === "reviewing" || runPhase === "ready"
       ? "curate"
-      : runPhase === "denoising" || trajectories.length > 0
+      : runPhase === "denoising" || runPhase === "steering" || trajectories.length > 0
       ? "denoise"
       : "scan";
 
@@ -591,6 +888,11 @@ export function useGeneration({
     dailyLimit,
     workflowStage,
     sessionId,
+    streamingText,
+    lastQualityScore,
+    steeringNote,
+    setSteeringNote,
+    resumeFromSteering,
     scanNoiseFragments,
     generate,
     catchBullet: catchBulletAction,

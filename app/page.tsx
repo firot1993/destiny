@@ -248,6 +248,7 @@ export default function Home() {
   const [model, setModel] = useState(PROVIDERS[DEFAULT_PROVIDER][0]);
   const [fireImpactActive, setFireImpactActive] = useState(false);
   const [sessionUuid, setSessionUuid] = useState<string>("");
+  const [enableGeminiSearch, setEnableGeminiSearch] = useState(false);
   useEffect(() => {
     setSessionUuid(getOrCreateSessionUuid());
   }, []);
@@ -272,6 +273,7 @@ export default function Home() {
     lang,
     t,
     sessionUuid,
+    enableGeminiSearch,
   });
 
   const handleFire = useCallback(() => {
@@ -448,6 +450,38 @@ export default function Home() {
                     {modelOption}
                   </button>
                 ))}
+              </div>
+            </div>
+
+            {/* Enhancement 7: Web search grounding toggle */}
+            <div style={{ marginTop: 16 }}>
+              <label
+                style={{
+                  ...labelStyle,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  cursor: "pointer",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={enableGeminiSearch}
+                  onChange={(e) => setEnableGeminiSearch(e.target.checked)}
+                  style={{ accentColor: theme.moss }}
+                />
+                {t("gemini_search_label")}
+              </label>
+              <div
+                style={{
+                  marginTop: 4,
+                  fontSize: 10,
+                  ...mono,
+                  color: theme.ink3,
+                  lineHeight: 1.5,
+                }}
+              >
+                {t("gemini_search_hint")}
               </div>
             </div>
           </div>
@@ -1017,6 +1051,115 @@ export default function Home() {
                   totalSteps={denoiseSteps}
                   isGenerating
                 />
+                {gen.lastQualityScore > 0 && (
+                  <div
+                    style={{
+                      marginTop: 8,
+                      fontSize: 10,
+                      ...mono,
+                      color: gen.lastQualityScore >= 7 ? theme.moss62 : theme.ink38,
+                    }}
+                  >
+                    {t("quality_score_label")}: {gen.lastQualityScore}/10
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Enhancement 5: Steering UI — shown during the steering pause */}
+            {gen.runPhase === "steering" && (
+              <div
+                style={{
+                  marginTop: 20,
+                  padding: "18px 22px",
+                  background: "rgba(255,250,240,0.54)",
+                  border: `1px solid ${theme.mossBorder16}`,
+                  borderRadius: 8,
+                  animation: "fadeUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both",
+                }}
+              >
+                <div style={sectionLabelStyle}>{t("steering_title")}</div>
+                <p
+                  className="serif"
+                  style={{
+                    margin: "0 0 12px",
+                    fontSize: 14,
+                    lineHeight: 1.6,
+                    color: theme.ink72,
+                  }}
+                >
+                  {t("steering_hint")}
+                </p>
+                <input
+                  type="text"
+                  value={gen.steeringNote}
+                  onChange={(e) => gen.setSteeringNote(e.target.value)}
+                  placeholder={t("steering_placeholder")}
+                  style={{
+                    width: "100%",
+                    padding: "12px 14px",
+                    borderRadius: 8,
+                    border: `1px solid ${theme.inkBorder08}`,
+                    background: "rgba(255,250,240,0.7)",
+                    fontSize: 14,
+                    color: theme.ink72,
+                    outline: "none",
+                    boxSizing: "border-box",
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") gen.resumeFromSteering();
+                  }}
+                />
+                <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
+                  <button
+                    onClick={gen.resumeFromSteering}
+                    style={{
+                      ...buttonStyles.primary,
+                      flex: 1,
+                      padding: "12px 0",
+                    }}
+                  >
+                    {gen.steeringNote.trim()
+                      ? t("steering_resume")
+                      : t("steering_skip")}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Enhancement 2: Streaming text display */}
+            {gen.streamingText && gen.isGenerating && (
+              <div
+                style={{
+                  marginTop: 20,
+                  padding: "18px 22px",
+                  background: "rgba(255,250,240,0.54)",
+                  border: `1px solid ${theme.inkBorder07}`,
+                  borderRadius: 8,
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 10,
+                    ...mono,
+                    color: theme.ink35,
+                    marginBottom: 10,
+                    letterSpacing: 0.6,
+                  }}
+                >
+                  {t("streaming_label")}
+                </div>
+                <div
+                  className="serif"
+                  style={{
+                    fontSize: 15,
+                    lineHeight: 1.75,
+                    color: theme.ink72,
+                    whiteSpace: "pre-wrap",
+                  }}
+                >
+                  {gen.streamingText}
+                </div>
               </div>
             )}
 

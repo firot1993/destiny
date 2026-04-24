@@ -20,7 +20,11 @@ export type LlmPhase =
   | "critique"
   | "sharpen"
   | "final"
-  | "cleanup";
+  | "cleanup"
+  | "quality_gate"
+  | "revision_verify"
+  | "diversity_check"
+  | "scan_rescan";
 
 export type UserRating = "like" | "dislike";
 

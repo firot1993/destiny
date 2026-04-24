@@ -35,18 +35,22 @@ Skip docs for trivial edits and typo-only changes. Prefer updating an existing f
 ### Generation Flow
 
 - `app/page.tsx` drives three tabs: `input`, `big5`, and `generate`.
-- `hooks/useGeneration.ts` owns the runtime phases: `idle -> scanning -> reviewing -> ready -> denoising -> complete`.
+- `hooks/useGeneration.ts` owns the runtime phases: `idle -> scanning -> reviewing -> ready -> steering -> denoising -> complete`.
 - Scan mode generates 10 raw fragments, then `lib/revolver.ts` turns them into bullets with catch/ricochet/spent state.
+- Post-scan diversity check (`generateDiversityCheckPrompt`) flags near-duplicate fragments and re-scans to replace them (best-effort, single retry).
 - The user must catch at least one bullet to fire. Up to 6 bullets are ordered into the revolver chamber.
 - Before denoising, the user supplies two extra signals:
   - `whyThese`
   - `rejectedFuture`
-- Denoising currently works as:
-  - scan fragments
+- Denoising now works as an adaptive agentic loop:
+  - scan fragments (with diversity check)
   - structure pass
   - critique pass on the early draft
-  - sharpen/refine passes
-  - final story pass
+  - **steering pause** — the user can optionally type a one-line direction; auto-resumes after 15s
+  - sharpen/refine passes (with optional steering note injected)
+  - **revision verification** — checks whether sharpen addressed the critique notes; runs a targeted fix pass if not
+  - **quality gate** — scores the draft 1-10; adds extra sharpen passes if the score is below threshold (max 2 extra)
+  - final story pass (**streamed** when the provider supports SSE)
   - cleanup pass
 
 ### Prompting
@@ -56,18 +60,26 @@ Skip docs for trivial edits and typo-only changes. Prefer updating an existing f
   - `hardState`
   - `latentForces`
   - `personalitySignature`
-- `generateStepPrompt(...)` takes ordered bullets, optional critique notes, and an optional signature author.
+- `generateStepPrompt(...)` takes ordered bullets, optional critique notes, an optional signature author, and an optional `steeringNote`.
 - `generateCleanupPrompt(...)` is the final anti-echo rewrite that removes obvious questionnaire language.
 - `parseNoiseFragments(...)` parses the scan response into usable bullet text.
+- `generateQualityGatePrompt(...)` + `parseQualityGateScore(...)` — adaptive quality assessment.
+- `generateRevisionVerificationPrompt(...)` + `parseRevisionVerification(...)` — multi-round critique verification.
+- `generateDiversityCheckPrompt(...)` + `parseDiversityCheck(...)` — scan diversity enforcement.
 
 ### Providers And Quotas
 
 - The UI provider/model picker is defined in `lib/constants.ts`.
 - The current shipped UI presets are OpenRouter and xAI.
 - `lib/providers.ts` also contains direct Anthropic and Gemini adapters, even though they are not exposed in the default picker.
+- `callProvider(...)` now includes automatic retry with exponential backoff (max 2 retries for server errors/rate limits).
+- `callProviderWithFallbacks(...)` tries the primary provider then falls through to `FALLBACK_PROVIDERS` (configurable via `NEXT_PUBLIC_FALLBACK_PROVIDERS` env var).
+- `callProviderStreaming(...)` / `buildStreamingProviderConfig(...)` support SSE streaming for OpenRouter and xAI providers.
+- `buildProviderConfig(...)` accepts an `enableGeminiSearch` option to toggle Gemini's `google_search` tool.
 - `app/api/generate/route.ts` applies:
   - per-IP throttling through `checkPerIpLimit(...)`
   - global daily quota through `checkAndConsumeDaily(...)`
+  - streaming SSE pass-through when `body.stream` is true
 - `app/api/generate/route.ts` can also record per-phase LLM calls through `recordLlmCall(...)` when a telemetry `sessionId` is present.
 - The client caches daily quota headers in `localStorage` using `DAILY_USAGE_STORAGE_PREFIX`.
 
