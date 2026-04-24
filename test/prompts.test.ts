@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import type { Fields } from "@/types";
-import { buildStoryConditioning, generateStepPrompt } from "@/lib/prompts";
+import {
+  buildStoryConditioning,
+  generateStepPrompt,
+  generateQualityGatePrompt,
+  parseQualityGateScore,
+  generateRevisionVerificationPrompt,
+  parseRevisionVerification,
+  generateDiversityCheckPrompt,
+  parseDiversityCheck,
+} from "@/lib/prompts";
 
 const sampleFields: Fields = {
   age: "20–29",
@@ -79,5 +88,137 @@ describe("prompt conditioning", () => {
     expect(prompt.content).toContain("Avoid these words:");
     expect(prompt.content).not.toContain("PERSON'S CURRENT STATE:");
     expect(prompt.content).not.toContain("Personality (Big Five)");
+  });
+
+  it("injects steering note into sharpen prompt when provided", () => {
+    const conditioning = buildStoryConditioning(sampleFields, [6, 6, 5, 5, 6]);
+
+    // progress >= 0.45 triggers sharpen prompt (step 2 of 4: 2/3 = 0.67)
+    const prompt = generateStepPrompt(
+      2,
+      4,
+      conditioning,
+      7,
+      "draft text about a quiet room",
+      "en",
+      undefined,
+      null,
+      null,
+      "make it darker and more visceral"
+    );
+
+    expect(prompt.content).toContain("USER DIRECTION");
+    expect(prompt.content).toContain("make it darker and more visceral");
+  });
+
+  it("does not inject steering block when steeringNote is null", () => {
+    const conditioning = buildStoryConditioning(sampleFields, [6, 6, 5, 5, 6]);
+
+    const prompt = generateStepPrompt(
+      2,
+      4,
+      conditioning,
+      7,
+      "draft text",
+      "en",
+      undefined,
+      null,
+      null,
+      null
+    );
+
+    expect(prompt.content).not.toContain("USER DIRECTION");
+  });
+});
+
+describe("quality gate (Enhancement 1)", () => {
+  it("generates a quality gate prompt with scoring instructions", () => {
+    const conditioning = buildStoryConditioning(sampleFields, [5, 5, 5, 5, 5]);
+    const prompt = generateQualityGatePrompt("A draft story.", conditioning);
+
+    expect(prompt.content).toContain("SCORE:");
+    expect(prompt.content).toContain("1-10");
+    expect(prompt.content).toContain("DRAFT:");
+    expect(prompt.content).toContain("A draft story.");
+  });
+
+  it("parses SCORE: 8 as shouldContinue=false", () => {
+    const result = parseQualityGateScore("SCORE: 8");
+    expect(result.score).toBe(8);
+    expect(result.shouldContinue).toBe(false);
+  });
+
+  it("parses SCORE: 4 as shouldContinue=true", () => {
+    const result = parseQualityGateScore("SCORE: 4");
+    expect(result.score).toBe(4);
+    expect(result.shouldContinue).toBe(true);
+  });
+
+  it("defaults to score 5 when no SCORE line found", () => {
+    const result = parseQualityGateScore("This draft is okay.");
+    expect(result.score).toBe(5);
+    expect(result.shouldContinue).toBe(true);
+  });
+
+  it("clamps out-of-range scores", () => {
+    expect(parseQualityGateScore("SCORE: 15").score).toBe(10);
+    expect(parseQualityGateScore("SCORE: 0").score).toBe(1);
+  });
+});
+
+describe("revision verification (Enhancement 3)", () => {
+  it("generates a revision verification prompt", () => {
+    const prompt = generateRevisionVerificationPrompt(
+      "Revised draft here.",
+      "- Fix the abstract language\n- Add more concrete details"
+    );
+
+    expect(prompt.content).toContain("ORIGINAL CRITIQUE NOTES:");
+    expect(prompt.content).toContain("REVISED DRAFT:");
+    expect(prompt.content).toContain("REVISION_OK");
+  });
+
+  it("parses REVISION_OK as allResolved", () => {
+    const result = parseRevisionVerification("REVISION_OK");
+    expect(result.allResolved).toBe(true);
+    expect(result.unresolvedNotes).toBeNull();
+  });
+
+  it("parses UNRESOLVED block as unresolved notes", () => {
+    const result = parseRevisionVerification(
+      "UNRESOLVED:\n- Fix the abstract language in paragraph 2"
+    );
+    expect(result.allResolved).toBe(false);
+    expect(result.unresolvedNotes).toContain("Fix the abstract language");
+  });
+});
+
+describe("diversity check (Enhancement 6)", () => {
+  it("generates a diversity check prompt with numbered fragments", () => {
+    const fragments = ["a held breath", "red dust", "a door half-open"];
+    const prompt = generateDiversityCheckPrompt(fragments);
+
+    expect(prompt.content).toContain("1:: a held breath");
+    expect(prompt.content).toContain("2:: red dust");
+    expect(prompt.content).toContain("3:: a door half-open");
+    expect(prompt.content).toContain("DIVERSE_OK");
+  });
+
+  it("parses DIVERSE_OK as isDiverse=true", () => {
+    const result = parseDiversityCheck("DIVERSE_OK");
+    expect(result.isDiverse).toBe(true);
+    expect(result.replaceIndices).toEqual([]);
+  });
+
+  it("parses REPLACE: 3, 7 as isDiverse=false with indices", () => {
+    const result = parseDiversityCheck("REPLACE: 3, 7");
+    expect(result.isDiverse).toBe(false);
+    expect(result.replaceIndices).toEqual([3, 7]);
+  });
+
+  it("handles malformed replace response gracefully", () => {
+    const result = parseDiversityCheck("I think all fragments are unique");
+    expect(result.isDiverse).toBe(true);
+    expect(result.replaceIndices).toEqual([]);
   });
 });
