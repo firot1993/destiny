@@ -1,134 +1,183 @@
-# Destiny — Life Trajectory Diffusion
+# Destiny
 
-A "diffusion model" for life trajectories. Input your current state, set guidance toward the phenomenal, and sample possible extraordinary futures.
+Destiny is a Next.js app for generating literary "possible futures" from a staged questionnaire, a Big Five personality read, and a short human curation step.
 
-Uses iterative LLM refinement to simulate denoising — starting from noise fragments and progressively sharpening them into coherent life trajectories.
+The current product is not a literal diffusion model. It is a prompt chain that scans for future fragments, lets the user catch the ones that feel charged, then denoises them into a finished narrative.
+
+## Experience Flow
+
+1. Fill out a four-chapter questionnaire in `Now`, `Unstable`, `Pull`, and `Motion`.
+2. Rate the Big Five sliders to shape behavioral tone rather than surface facts.
+3. Generate 10 story fragments, then catch the bullets you want to keep.
+4. Answer two post-curation questions about why those fragments matter and which future you are refusing.
+5. Fire the chamber and run a multi-step rewrite loop that turns the selected motifs into a finished life-path story.
 
 ## Architecture
 
-```
+```text
 ┌──────────────────────────┐      ┌──────────────────────────────┐
-│  Next.js App (React UI)  │ ───▶ │  /api/generate Route Handler │
+│  Next.js App Router UI   │ ───▶ │  /api/generate route handler │
 │  app/page.tsx            │      │  app/api/generate/route.ts   │
-└──────────────────────────┘      └──────────────┬───────────────┘
-                                                 │
-                        ┌────────────────────────┼────────────────────────┐
-                        ▼                        ▼                        ▼
-                  Anthropic API           OpenRouter API         xAI / Google Gemini
+└──────────────┬───────────┘      └──────────────┬───────────────┘
+               │                                  │
+               │                                  ├─ OpenRouter
+               │                                  ├─ xAI
+               │                                  ├─ Anthropic
+               │                                  └─ Google Gemini
+               │
+               ├─ Questionnaire normalization (`lib/questionnaire.ts`)
+               ├─ Story conditioning + prompts (`lib/prompts.ts`)
+               ├─ Bullet model (`lib/revolver.ts`)
+               ├─ Runtime orchestration (`hooks/useGeneration.ts`)
+               └─ /api/telemetry (`app/api/telemetry/route.ts`)
+                                                  │
+                                                  └─ Supabase / Postgres (optional)
 ```
 
-All provider responses are normalized to Anthropic's format before returning to the client. Rate limiting uses Upstash Redis (per-IP per-minute + global daily cap).
+Provider responses are normalized to Anthropic-style text blocks before returning to the client. Optional rate limiting uses Upstash Redis for per-IP throttling plus a global daily cap, and the UI caches the daily quota snapshot in `localStorage`.
 
-## Repository Structure
+The in-app provider picker currently ships with OpenRouter and xAI presets from `lib/constants.ts`. The route adapter also contains direct Anthropic and Gemini support if the request body uses those providers.
 
-```
-app/                Next.js App Router (pages + API routes)
-  page.tsx          Main UI — state machine and generation pipeline
-  api/generate/     POST endpoint — provider routing + rate limiting
-components/         Modular React components (Big5Form, BulletField, AmmoHUD, etc.)
-hooks/              useGeneration.ts — generation pipeline logic
-i18n/               Context-based i18n (English, Chinese, Japanese, Korean)
-lib/                constants, prompts, providers, rateLimit, db, telemetry
-types/              Shared TypeScript types
-supabase/           Local Postgres config + migrations (LLM dataset)
-doc/                Plans, architecture notes, worklogs
-```
+When Supabase is configured, the app also records anonymous session telemetry, LLM calls, curated bullets, final stories, and story ratings for later analysis and dataset building. When it is not configured, telemetry calls are silent no-ops.
 
 ## Quick Start
 
 ```bash
 npm install
-cp .env.local.example .env.local   # then fill in keys
+cp .env.local.example .env.local
 npm run dev
 ```
 
 Open `http://localhost:3000`.
 
-### Environment Variables
+## Environment Variables
 
-```
-ANTHROPIC_API_KEY=
-OPENROUTER_API_KEY=
-XAI_API_KEY=               # optional
-GOOGLE_API_KEY=            # optional
-UPSTASH_REDIS_REST_URL=    # optional — enables rate limiting
+```bash
+OPENROUTER_API_KEY=        # required for the default provider path
+XAI_API_KEY=               # optional, enables xAI models in the UI
+ANTHROPIC_API_KEY=         # optional, supported by the route adapter
+GOOGLE_API_KEY=            # optional, supported by the route adapter
+SITE_URL=                  # optional, used as OpenRouter HTTP-Referer
+
+UPSTASH_REDIS_REST_URL=    # optional, enables rate limiting
 UPSTASH_REDIS_REST_TOKEN=  # optional
-MAX_REQUESTS_PER_DAY=1000  # optional, default 1000
-SUPABASE_URL=              # optional — enables telemetry/persistence
+MAX_REQUESTS_PER_DAY=1000  # optional, defaults to 1000
+
+SUPABASE_URL=              # optional, enables telemetry/persistence
 SUPABASE_SERVICE_ROLE_KEY= # optional
 ```
 
 ## Commands
 
 ```bash
-npm run dev       # local dev server
-npm run build     # production build
-npm run start     # run production build locally
-npm run lint      # ESLint
-npm test          # vitest run
-npm run test:watch # vitest watch
+npm run dev
+npm run build
+npm run start
+npm run lint
+npm test
+npm run test:watch
 
-npm run db:start  # boot local Postgres + Studio (needs Docker)
-npm run db:reset  # apply supabase/migrations/ to local DB
-npm run db:push   # apply migrations to the linked Supabase project
-npm run db:stop   # stop the local Postgres container
+npm run db:start
+npm run db:reset
+npm run db:push
+npm run db:stop
+```
+
+## Repository Layout
+
+```text
+app/                App Router pages, layout, globals, and API routes
+components/         Questionnaire, curate-stage, results UI, and StoryRating
+hooks/              Runtime orchestration for scan, curate, denoise, and telemetry
+i18n/               English + Simplified Chinese UI copy
+lib/                Questionnaire schema, prompts, providers, rateLimit, db, telemetry
+public/             Static assets
+supabase/           Local Supabase config + migrations for telemetry storage
+test/               Vitest + RTL coverage for runtime and UI helpers
+types/              Shared TypeScript types
+doc/                Human-authored plans, architecture notes, and worklogs
+docs/superpowers/   Skill-generated specs/plans from prior sessions
 ```
 
 ## Generation Pipeline
 
-1. **Scan** — LLM generates 10 raw noise fragments (4–12 words each).
-2. **Curate** — Fragments become "bullets" that fly across a kinetic typography field. User clicks to catch up to 6 bullets into a Danganronpa-style revolver chamber. Missed bullets ricochet and fade; after 3 passes they're spent. When 6 chambers are loaded, the player fires.
-3. **Denoise** — Multi-step refinement loop (2–8 steps). Each step feeds the previous output as context; Big Five scores and guidance scale (1–10) are included in every prompt.
-   - Steps 1–40%: add structure and causality
-   - Steps 40–70%: sharpen specificity and turning points
-   - Steps 70–100%: emotional depth and inevitability
-   - Final step: polished 8–12 sentence narrative
+1. `Questionnaire`  
+   `lib/questionnaire.ts` builds a route-aware multi-step form. Answers are normalized into the `Fields` shape used by prompts.
 
-## Features
+2. `Conditioning`  
+   `buildStoryConditioning(...)` converts questionnaire answers, Big Five scores, and later curation answers into:
+   - hard state
+   - latent forces
+   - personality signature
 
-- **Structured input** — age, location, skills, resources, constraints, obsessions
-- **Big Five personality** — shapes HOW trajectories unfold, not just what happens
-- **Adjustable denoising steps** (2–8) — more steps = finer refinement
-- **Guidance scale** (1–10) — 1 = quiet life, 10 = biography-worthy
-- **Danganronpa-style Curate** — kinetic typography bullet field, cartridge HUD, cinematic FIRE beat
-- **i18n** — English, Chinese
+3. `Scan`  
+   Step `0` in `generateStepPrompt(...)` asks the model for 10 unresolved future fragments. `parseNoiseFragments(...)` converts the raw response into bullets.
 
-## Local Database
+4. `Curate`  
+   `BulletField` and `AmmoHUD` let the user catch up to 6 fragments into the revolver chamber. The user then answers `whyThese` and `rejectedFuture` before firing.
 
-The app persists questionnaire answers, bullet selections, intermediate LLM calls, final stories, and user ratings to Postgres so we can build a fine-tuning dataset. The schema lives under `supabase/migrations/`.
+5. `Denoise`  
+   `useGeneration.ts` runs a staged rewrite loop:
+   - structure
+   - critique
+   - sharpen/refine
+   - final story
+
+   The hook also injects ordered bullet text plus a signature author chosen by `lib/styles.ts`.
+
+6. `Cleanup`  
+   A final cleanup prompt strips obvious questionnaire language and keeps the finished trajectory concrete.
+
+## Persistence And Telemetry
+
+The app can persist questionnaire answers, bullet selections, intermediate LLM calls, final stories, and user ratings to Postgres so the team can study generations and export fine-tuning datasets. The schema lives under `supabase/migrations/`.
 
 ```bash
-npm run db:start    # requires Docker — boots local Postgres + Studio on localhost
-npm run db:reset    # applies all migrations to the fresh local DB
+npm run db:start
+npm run db:reset
 ```
 
-Copy the printed `service_role` key into `SUPABASE_SERVICE_ROLE_KEY` in `.env.local`. Open Studio at `http://localhost:54323` to browse rows. For production, link the repo to a Supabase cloud project and run `npm run db:push` to promote migrations.
+`npm run db:start` requires Docker and boots local Postgres plus Supabase Studio. After startup, copy the printed `service_role` key into `SUPABASE_SERVICE_ROLE_KEY` in `.env.local`. Studio is available at `http://localhost:54323`.
 
-When `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` are unset, the app runs normally — every telemetry call is a silent no-op, matching the behavior of the Upstash rate limiter.
+For production, link the repo to a Supabase project and run `npm run db:push` to promote migrations.
 
-## Data Collection
+Telemetry is anonymous and session-based:
 
-Destiny captures anonymous generation telemetry to improve prompts and eventually fine-tune the model. Collected per session:
+- A UUID stored in `localStorage` (`destiny-session-uuid`) identifies the browser session
+- `/api/telemetry` records session start, curate completion, final story completion, and like/dislike feedback
+- `/api/generate` can also persist per-phase LLM request/response pairs when a `sessionId` is present
 
-- Questionnaire answers, Big Five scores, guidance/denoise-step settings
-- Every LLM request/response pair across the pipeline (`scan` → `structure` → `critique` → `sharpen` → `final` → `cleanup`)
-- Which noise fragments the user caught, in which chamber order, plus their curation reflection
-- The final story and the user's thumbs-up / thumbs-down rating
+Captured data includes:
 
-Each session is keyed by an anonymous UUID stored in `localStorage` (`destiny-session-uuid`) — **no IP address, no auth, no browser fingerprint**. See `doc/architecture/telemetry-and-persistence.md` for the schema and the SQL query to export a JSONL dataset for fine-tuning.
+- Questionnaire answers, Big Five scores, language, provider/model, and story conditioning
+- Every LLM request/response pair across `scan`, `structure`, `critique`, `sharpen`, `final`, and `cleanup`
+- Which fragments the user caught, their chamber order, curation answers, and chosen author voice
+- The final story plus thumbs-up / thumbs-down feedback
+
+No IP address, auth account, or browser fingerprint is stored in the telemetry schema. See `doc/architecture/telemetry-and-persistence.md` for more detail.
 
 ## Rate Limiting
 
 Optional, enabled when `UPSTASH_REDIS_REST_URL` is set:
 
-- **Per-minute**: IP-based throttling via Upstash Redis
-- **Per-day**: Global cap via Upstash Redis counter; quota returned in `X-Daily-Remaining` / `X-Daily-Limit` response headers and cached client-side in localStorage
+- Per-IP throttling via Upstash Redis
+- A global daily cap returned in `X-Daily-Remaining` / `X-Daily-Limit` headers and cached client-side in `localStorage`
+
+## Product Notes
+
+- The questionnaire is chapter-based, not a plain profile form.
+- Big Five scores affect behavior and tone, not just labels.
+- The curate phase is a real user choice point, not a cosmetic animation.
+- The final output is a literary future narrative shaped by a multi-pass rewrite loop.
+- Users can rate the finished story with a simple like/dislike control.
+- Current i18n support is English and Simplified Chinese.
 
 ## Tech Stack
 
-- **Framework**: Next.js (App Router) + React + Framer Motion
-- **LLM providers**: Anthropic, OpenRouter, xAI
-- **Rate limiting**: Upstash Redis
-- **Persistence**: Supabase (Postgres) — optional, for fine-tuning dataset
-- **i18n**: Lightweight React Context (no dependencies)
-- **Testing**: Vitest + React Testing Library
+- Next.js 15 App Router
+- React 18
+- TypeScript
+- Framer Motion
+- Upstash Redis for optional rate limiting
+- Supabase/Postgres for optional telemetry persistence
+- Vitest + React Testing Library
