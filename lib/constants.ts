@@ -5,6 +5,10 @@ export const PROVIDERS: Record<string, string[]> = {
     "anthropic/claude-sonnet-4.6",
     "openai/gpt-5.4",
   ],
+  deepseek: [
+    "deepseek-v4-flash",
+    "deepseek-v4-pro",
+  ],
   xai: [
     "grok-4.20-experimental-beta-0304-reasoning",
     "grok-4.20-multi-agent-experimental-beta-0304",

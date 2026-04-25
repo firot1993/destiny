@@ -988,16 +988,21 @@ Respond with only the revised trajectory.${langInstruction}`,
 
 export function generateCleanupPrompt(
   trajectory: string,
-  lang = "en"
+  lang = "en",
+  steeringNote?: string | null
 ): Message {
   const langInstruction =
     lang !== "en"
       ? `\n\nIMPORTANT: Respond entirely in ${LANG_NAMES[lang] || lang}.`
       : "";
+  const steeringBlock = steeringNote
+    ? `\nUSER DIRECTION (honor this instruction in the final pass):\n${steeringNote}\n`
+    : "";
 
   return {
     role: "user",
     content: `Read this trajectory and rewrite any sentence that sounds like it came from a personality test, self-help book, or career questionnaire.
+${steeringBlock}
 
 TRAJECTORY:
 ${trajectory}
@@ -1011,7 +1016,7 @@ Rewrite any sentence that:
 
 Replace each such sentence with a concrete scene, image, consequence, or social fact that carries the same meaning.
 
-Also check the texture: if every sentence carries the same literary weight, break the pattern. Add one plain, offhand, or mundane sentence. Leave at least one image unexplained. Keep chronology and the existing motifs intact — do not add new themes. Preserve the paragraph structure (4 paragraphs separated by blank lines) and do not shorten the piece; the revised version should be at least as long as the original.
+Also check the texture: if every sentence carries the same literary weight, break the pattern. Add one plain, offhand, or mundane sentence. Leave at least one image unexplained. Keep chronology and the existing motifs intact — do not add new themes. Preserve the paragraph structure (4 paragraphs separated by blank lines) and do not shorten the piece; the revised version should be at least as long as the original.${steeringNote ? " Also honor the user direction above." : ""}
 
 Respond with only the revised trajectory.${langInstruction}`,
   };

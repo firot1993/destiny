@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Fields } from "@/types";
 import {
   buildStoryConditioning,
+  generateCleanupPrompt,
   generateStepPrompt,
   generateQualityGatePrompt,
   parseQualityGateScore,
@@ -128,6 +129,18 @@ describe("prompt conditioning", () => {
     );
 
     expect(prompt.content).not.toContain("USER DIRECTION");
+  });
+
+  it("injects user direction into cleanup prompt when provided", () => {
+    const prompt = generateCleanupPrompt(
+      "A finished draft that needs one last pass.",
+      "en",
+      "Make it darker and more concrete."
+    );
+
+    expect(prompt.content).toContain("USER DIRECTION");
+    expect(prompt.content).toContain("Make it darker and more concrete.");
+    expect(prompt.content).toContain("Also honor the user direction above.");
   });
 });
 

@@ -122,6 +122,25 @@ export function buildProviderConfig(
     };
   }
 
+  if (provider === "deepseek") {
+    return {
+      apiUrl: "https://api.deepseek.com/chat/completions",
+      apiBody: JSON.stringify({
+        model: body.model || "deepseek-v4-flash",
+        max_tokens: body.max_tokens || 1000,
+        temperature: body.temperature ?? 1.0,
+        messages: (body.messages || []).map((m) => ({
+          role: m.role,
+          content: m.content,
+        })),
+      }),
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY ?? ""}`,
+      },
+    };
+  }
+
   if (provider === "openrouter") {
     return {
       apiUrl: "https://openrouter.ai/api/v1/chat/completions",
@@ -176,7 +195,7 @@ function parseProviderResponse(
     return { content: [{ type: "text", text }] };
   }
 
-  if (provider === "xai" || provider === "openrouter") {
+  if (provider === "xai" || provider === "openrouter" || provider === "deepseek") {
     const text = data ? extractOpenRouterText(data) : "";
     if (!text) {
       throw new ProviderError(
@@ -300,7 +319,7 @@ export async function callProviderWithFallbacks(
 // ---------------------------------------------------------------------------
 
 /**
- * Build a streaming request config for OpenAI-compatible APIs (OpenRouter, xAI).
+ * Build a streaming request config for OpenAI-compatible APIs.
  * Gemini and Anthropic have different streaming shapes — only OpenAI-compat is
  * supported in this initial pass.
  */
@@ -347,6 +366,26 @@ export function buildStreamingProviderConfig(
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${process.env.XAI_API_KEY ?? ""}`,
+      },
+    };
+  }
+
+  if (provider === "deepseek") {
+    return {
+      apiUrl: "https://api.deepseek.com/chat/completions",
+      apiBody: JSON.stringify({
+        model: body.model || "deepseek-v4-flash",
+        max_tokens: body.max_tokens || 1000,
+        temperature: body.temperature ?? 1.0,
+        stream: true,
+        messages: (body.messages || []).map((m) => ({
+          role: m.role,
+          content: m.content,
+        })),
+      }),
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY ?? ""}`,
       },
     };
   }

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { renderHook, act } from "@testing-library/react";
+import { renderHook, act, waitFor } from "@testing-library/react";
 import { useGeneration } from "@/hooks/useGeneration";
 
 const mockFetch = vi.fn();
@@ -19,6 +19,66 @@ function makeMockResponse(data: unknown) {
     json: async () => data,
     text: async () => JSON.stringify(data),
   };
+}
+
+function sseDelta(text: string): string {
+  return `data: ${JSON.stringify({
+    choices: [{ delta: { content: text } }],
+  })}\n\n`;
+}
+
+function makeStreamResponse(chunks: string[]) {
+  const encoder = new TextEncoder();
+  return new Response(
+    new ReadableStream({
+      start(controller) {
+        for (const chunk of chunks) {
+          controller.enqueue(encoder.encode(chunk));
+        }
+        controller.close();
+      },
+    }),
+    {
+      status: 200,
+      headers: {
+        "Content-Type": "text/event-stream",
+        "X-Daily-Remaining": "100",
+        "X-Daily-Limit": "100",
+      },
+    }
+  );
+}
+
+function makeOpenStreamResponse(chunks: string[]) {
+  const encoder = new TextEncoder();
+  let close!: () => void;
+  const response = new Response(
+    new ReadableStream({
+      start(controller) {
+        for (const chunk of chunks) {
+          controller.enqueue(encoder.encode(chunk));
+        }
+        close = () => controller.close();
+      },
+    }),
+    {
+      status: 200,
+      headers: {
+        "Content-Type": "text/event-stream",
+        "X-Daily-Remaining": "100",
+        "X-Daily-Limit": "100",
+      },
+    }
+  );
+  return { response, close };
+}
+
+function deferredMockResponse() {
+  let resolve!: (response: ReturnType<typeof makeMockResponse>) => void;
+  const response = new Promise<ReturnType<typeof makeMockResponse>>((res) => {
+    resolve = res;
+  });
+  return { response, resolve };
 }
 
 describe("useGeneration bullet lifecycle", () => {
@@ -196,17 +256,425 @@ describe("useGeneration bullet lifecycle", () => {
       result.current.catchBullet(1);
     });
 
+    let generatePromise!: Promise<void>;
+    act(() => {
+      generatePromise = result.current.generate();
+    });
+
+    await waitFor(() => {
+      expect(result.current.runPhase).toBe("steering");
+    });
+
+    act(() => {
+      result.current.resumeFromSteering();
+    });
+
     await act(async () => {
-      await result.current.generate();
+      await generatePromise;
     });
 
     expect(mockFetch).toHaveBeenCalledTimes(3);
     const cleanupRequest = JSON.parse(mockFetch.mock.calls[2][1].body as string) as {
+      stream?: boolean;
       messages: Array<{ content: string }>;
     };
+    expect(cleanupRequest.stream).toBe(true);
     expect(cleanupRequest.messages[0].content).toContain(
       "sounds like it came from a personality test"
     );
     expect(result.current.trajectories[0]).toBe("Cleaned final trajectory");
+  });
+
+  it("keeps streamed draft visible while cleanup is pending", async () => {
+    let resolveCleanup!: (response: ReturnType<typeof makeMockResponse>) => void;
+    const cleanupResponse = new Promise<ReturnType<typeof makeMockResponse>>(
+      (resolve) => {
+        resolveCleanup = resolve;
+      }
+    );
+
+    mockFetch
+      .mockResolvedValueOnce(
+        makeMockResponse({
+          content: [{ type: "text", text: "1:: a held breath" }],
+        })
+      )
+      .mockResolvedValueOnce(
+        makeStreamResponse([
+          sseDelta("Draft "),
+          sseDelta("trajectory"),
+          "data: [DONE]\n\n",
+        ])
+      )
+      .mockReturnValueOnce(cleanupResponse);
+
+    const { result } = renderHook(() =>
+      useGeneration({
+        fields: {
+          age: "20-29",
+          mobility: "Can relocate",
+          currentMode: "Builder",
+          trajectoryFocus: "Leverage",
+          hiddenEdge: "Runway",
+          recurringTrap: "Waiting",
+          costWillingness: "Visibility",
+          magneticScene: "A small room",
+          socialMirror: "Not stagnation",
+          obsessions: "Leverage",
+          delayFailureMode: "Waiting",
+          inflection: "A stranger bets on me",
+          location: "Can relocate",
+          skills: "",
+          resources: "Runway",
+          constraints: "Waiting",
+          workStyle: "A small room",
+          riskTolerance: "Visibility",
+          timeHorizon: "Not stagnation",
+        },
+        big5: [6, 6, 5, 5, 7],
+        guidance: 7,
+        denoiseSteps: 2,
+        provider: "openrouter",
+        model: "test",
+        lang: "en",
+        t: (k: string) => k,
+        curationAnswers: {
+          whyThese: "They feel true",
+          rejectedFuture: "too safe",
+        },
+      })
+    );
+
+    await act(async () => {
+      await result.current.scanNoiseFragments();
+    });
+
+    act(() => {
+      result.current.catchBullet(1);
+    });
+
+    await waitFor(() => {
+      expect(result.current.runPhase).toBe("ready");
+    });
+
+    act(() => {
+      void result.current.generate();
+    });
+
+    await waitFor(() => {
+      expect(result.current.runPhase).toBe("steering");
+      expect(result.current.streamingText).toBe("Draft trajectory");
+    });
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+
+    act(() => {
+      result.current.resumeFromSteering();
+    });
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledTimes(3);
+      expect(result.current.streamingText).toBe("Draft trajectory");
+    });
+
+    await act(async () => {
+      resolveCleanup(
+        makeMockResponse({
+          content: [{ type: "text", text: "Cleaned final trajectory" }],
+        })
+      );
+    });
+
+    await waitFor(() => {
+      expect(result.current.trajectories[0]).toBe("Cleaned final trajectory");
+    });
+  });
+
+  it("parses streamed SSE data split across network chunks", async () => {
+    const fullDelta = sseDelta("Draft trajectory");
+    const splitAt = fullDelta.indexOf("trajectory");
+
+    mockFetch
+      .mockResolvedValueOnce(
+        makeMockResponse({
+          content: [{ type: "text", text: "1:: a held breath" }],
+        })
+      )
+      .mockResolvedValueOnce(
+        makeStreamResponse([
+          fullDelta.slice(0, splitAt),
+          fullDelta.slice(splitAt),
+          "data: [DONE]\n\n",
+        ])
+      )
+      .mockResolvedValueOnce(
+        makeMockResponse({
+          content: [{ type: "text", text: "Cleaned final trajectory" }],
+        })
+      );
+
+    const { result } = renderHook(() =>
+      useGeneration({
+        fields: {
+          age: "20-29",
+          mobility: "Can relocate",
+          currentMode: "Builder",
+          trajectoryFocus: "Leverage",
+          hiddenEdge: "Runway",
+          recurringTrap: "Waiting",
+          costWillingness: "Visibility",
+          magneticScene: "A small room",
+          socialMirror: "Not stagnation",
+          obsessions: "Leverage",
+          delayFailureMode: "Waiting",
+          inflection: "A stranger bets on me",
+          location: "Can relocate",
+          skills: "",
+          resources: "Runway",
+          constraints: "Waiting",
+          workStyle: "A small room",
+          riskTolerance: "Visibility",
+          timeHorizon: "Not stagnation",
+        },
+        big5: [6, 6, 5, 5, 7],
+        guidance: 7,
+        denoiseSteps: 2,
+        provider: "openrouter",
+        model: "test",
+        lang: "en",
+        t: (k: string) => k,
+        curationAnswers: {
+          whyThese: "They feel true",
+          rejectedFuture: "too safe",
+        },
+      })
+    );
+
+    await act(async () => {
+      await result.current.scanNoiseFragments();
+    });
+
+    act(() => {
+      result.current.catchBullet(1);
+    });
+
+    let generatePromise!: Promise<void>;
+    act(() => {
+      generatePromise = result.current.generate();
+    });
+
+    await waitFor(() => {
+      expect(result.current.runPhase).toBe("steering");
+    });
+
+    act(() => {
+      result.current.resumeFromSteering();
+    });
+
+    await act(async () => {
+      await generatePromise;
+    });
+
+    expect(result.current.error).toBeNull();
+    expect(result.current.trajectories[0]).toBe("Cleaned final trajectory");
+  });
+
+  it("pauses after the final draft so cleanup can use a big-moment direction", async () => {
+    const cleanupStream = makeOpenStreamResponse([
+      sseDelta("Darker "),
+      sseDelta("final"),
+    ]);
+
+    mockFetch
+      .mockResolvedValueOnce(
+        makeMockResponse({
+          content: [{ type: "text", text: "1:: a held breath" }],
+        })
+      )
+      .mockResolvedValueOnce(
+        makeStreamResponse([
+          sseDelta("Final "),
+          sseDelta("draft"),
+          "data: [DONE]\n\n",
+        ])
+      )
+      .mockResolvedValueOnce(cleanupStream.response);
+
+    const { result } = renderHook(() =>
+      useGeneration({
+        fields: {
+          age: "20-29",
+          mobility: "Can relocate",
+          currentMode: "Builder",
+          trajectoryFocus: "Leverage",
+          hiddenEdge: "Runway",
+          recurringTrap: "Waiting",
+          costWillingness: "Visibility",
+          magneticScene: "A small room",
+          socialMirror: "Not stagnation",
+          obsessions: "Leverage",
+          delayFailureMode: "Waiting",
+          inflection: "A stranger bets on me",
+          location: "Can relocate",
+          skills: "",
+          resources: "Runway",
+          constraints: "Waiting",
+          workStyle: "A small room",
+          riskTolerance: "Visibility",
+          timeHorizon: "Not stagnation",
+        },
+        big5: [6, 6, 5, 5, 7],
+        guidance: 7,
+        denoiseSteps: 2,
+        provider: "openrouter",
+        model: "test",
+        lang: "en",
+        t: (k: string) => k,
+        curationAnswers: {
+          whyThese: "They feel true",
+          rejectedFuture: "too safe",
+        },
+      })
+    );
+
+    await act(async () => {
+      await result.current.scanNoiseFragments();
+    });
+
+    act(() => {
+      result.current.catchBullet(1);
+    });
+
+    await waitFor(() => {
+      expect(result.current.runPhase).toBe("ready");
+    });
+
+    act(() => {
+      void result.current.generate();
+    });
+
+    await waitFor(() => {
+      expect(result.current.runPhase).toBe("steering");
+      expect(result.current.streamingText).toBe("Final draft");
+    });
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+
+    act(() => {
+      result.current.setSteeringNote("Make it darker and more concrete.");
+      result.current.resumeFromSteering();
+    });
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledTimes(3);
+      expect(result.current.streamingText).toBe("Darker final");
+    });
+
+    const cleanupRequest = JSON.parse(mockFetch.mock.calls[2][1].body as string) as {
+      messages: Array<{ content: string }>;
+    };
+    expect(cleanupRequest.messages[0].content).toContain(
+      "Make it darker and more concrete."
+    );
+
+    await act(async () => {
+      cleanupStream.close();
+    });
+  });
+
+  it("shows non-streamed sharpen drafts in the live preview during the next helper pass", async () => {
+    const verifyResponse = deferredMockResponse();
+
+    mockFetch
+      .mockResolvedValueOnce(
+        makeMockResponse({
+          content: [{ type: "text", text: "1:: a held breath" }],
+        })
+      )
+      .mockResolvedValueOnce(
+        makeMockResponse({
+          content: [{ type: "text", text: "Structure draft" }],
+        })
+      )
+      .mockResolvedValueOnce(
+        makeMockResponse({
+          content: [{ type: "text", text: "- Make it less abstract" }],
+        })
+      )
+      .mockResolvedValueOnce(
+        makeMockResponse({
+          content: [{ type: "text", text: "Step 2 sharpen draft" }],
+        })
+      )
+      .mockReturnValueOnce(verifyResponse.response);
+
+    const { result } = renderHook(() =>
+      useGeneration({
+        fields: {
+          age: "20-29",
+          mobility: "Can relocate",
+          currentMode: "Builder",
+          trajectoryFocus: "Leverage",
+          hiddenEdge: "Runway",
+          recurringTrap: "Waiting",
+          costWillingness: "Visibility",
+          magneticScene: "A small room",
+          socialMirror: "Not stagnation",
+          obsessions: "Leverage",
+          delayFailureMode: "Waiting",
+          inflection: "A stranger bets on me",
+          location: "Can relocate",
+          skills: "",
+          resources: "Runway",
+          constraints: "Waiting",
+          workStyle: "A small room",
+          riskTolerance: "Visibility",
+          timeHorizon: "Not stagnation",
+        },
+        big5: [6, 6, 5, 5, 7],
+        guidance: 7,
+        denoiseSteps: 4,
+        provider: "openrouter",
+        model: "test",
+        lang: "en",
+        t: (k: string) => k,
+        curationAnswers: {
+          whyThese: "They feel true",
+          rejectedFuture: "too safe",
+        },
+      })
+    );
+
+    await act(async () => {
+      await result.current.scanNoiseFragments();
+    });
+
+    act(() => {
+      result.current.catchBullet(1);
+    });
+
+    act(() => {
+      void result.current.generate();
+    });
+
+    await waitFor(() => {
+      expect(result.current.runPhase).toBe("steering");
+      expect(result.current.streamingText).toBe("Structure draft");
+    });
+
+    act(() => {
+      result.current.resumeFromSteering();
+    });
+
+    await waitFor(() => {
+      expect(result.current.streamingText).toBe("Step 2 sharpen draft");
+      expect(mockFetch).toHaveBeenCalledTimes(5);
+    });
+
+    await act(async () => {
+      verifyResponse.resolve(
+        makeMockResponse({
+          content: [{ type: "text", text: "REVISION_OK" }],
+        })
+      );
+    });
   });
 });
