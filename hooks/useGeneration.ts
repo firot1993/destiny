@@ -136,6 +136,16 @@ function resolveDailyUsage(opts: {
   };
 }
 
+function sanitizeSteeringNote(note: string): string | null {
+  const sanitized = note
+    .trim()
+    .slice(0, 200)
+    .replace(/ignore (all )?(previous|prior|above) (instructions?|prompts?|rules?)/gi, "")
+    .replace(/system\s*:/gi, "")
+    .trim();
+  return sanitized || null;
+}
+
 export interface UseGenerationParams {
   fields: Fields;
   big5: number[];
@@ -170,6 +180,7 @@ export interface UseGenerationReturn {
   /** Pending steering note — set externally to inject direction before sharpen */
   steeringNote: string;
   setSteeringNote: (note: string) => void;
+  chooseSteeringDirection: (note: string) => void;
   /** Resume generation after the steering pause */
   resumeFromSteering: () => void;
   scanNoiseFragments: () => Promise<void>;
@@ -210,10 +221,11 @@ export function useGeneration({
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [streamingText, setStreamingText] = useState("");
   const [lastQualityScore, setLastQualityScore] = useState(0);
-  const [steeringNote, setSteeringNote] = useState("");
+  const [steeringNote, setSteeringNoteState] = useState("");
   const sessionIdRef = useRef<string | null>(null);
   const abortRef = useRef(false);
   const generationLockRef = useRef(false);
+  const steeringNoteRef = useRef("");
   // Steering pause mechanism: resolve this promise to resume generation
   const steeringResolveRef = useRef<(() => void) | null>(null);
   const caughtCount = bullets.filter((b) => b.status === "caught").length;
@@ -251,6 +263,11 @@ export function useGeneration({
       setRunPhase("reviewing");
     }
   }, [activeBulletsCount, caughtCount, runPhase]);
+
+  const setSteeringNote = useCallback((note: string) => {
+    steeringNoteRef.current = note;
+    setSteeringNoteState(note);
+  }, []);
 
   const callModel = async (
     messages: ReturnType<typeof generateStepPrompt>[],
@@ -327,8 +344,29 @@ export function useGeneration({
     // ---------------------------------------------------------------------------
     if (shouldStream && res.headers.get("Content-Type")?.includes("text/event-stream") && res.body) {
       let fullText = "";
+      let bufferedLine = "";
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
+      const processSseLine = (line: string) => {
+        const normalizedLine = line.trim();
+        if (!normalizedLine.startsWith("data:")) return;
+
+        const data = normalizedLine.slice(5).trim();
+        if (data === "[DONE]") return;
+
+        try {
+          const parsed = JSON.parse(data) as {
+            choices?: Array<{ delta?: { content?: string } }>;
+          };
+          const delta = parsed?.choices?.[0]?.delta?.content;
+          if (delta) {
+            fullText += delta;
+            setStreamingText(fullText);
+          }
+        } catch {
+          // Ignore malformed SSE lines; partial lines stay buffered until complete.
+        }
+      };
 
       try {
         // eslint-disable-next-line no-constant-condition
@@ -336,27 +374,16 @@ export function useGeneration({
           const { done, value } = await reader.read();
           if (done) break;
 
-          const chunk = decoder.decode(value, { stream: true });
-          // Parse SSE lines for OpenAI-compat format
-          const lines = chunk.split("\n");
+          bufferedLine += decoder.decode(value, { stream: true });
+          const lines = bufferedLine.split(/\r?\n/);
+          bufferedLine = lines.pop() ?? "";
           for (const line of lines) {
-            if (line.startsWith("data: ")) {
-              const data = line.slice(6).trim();
-              if (data === "[DONE]") continue;
-              try {
-                const parsed = JSON.parse(data) as {
-                  choices?: Array<{ delta?: { content?: string } }>;
-                };
-                const delta = parsed?.choices?.[0]?.delta?.content;
-                if (delta) {
-                  fullText += delta;
-                  setStreamingText(fullText);
-                }
-              } catch {
-                // Ignore malformed SSE lines
-              }
-            }
+            processSseLine(line);
           }
+        }
+        bufferedLine += decoder.decode();
+        if (bufferedLine.trim()) {
+          processSseLine(bufferedLine);
         }
       } finally {
         reader.releaseLock();
@@ -384,6 +411,7 @@ export function useGeneration({
 
     const text = extractNormalizedText(data.content);
     if (!text) throw new Error("API returned no text content.");
+    if (shouldStream) setStreamingText(text);
     return text;
   };
 
@@ -595,6 +623,45 @@ export function useGeneration({
     }
   }, []);
 
+  const chooseSteeringDirection = useCallback((note: string) => {
+    setSteeringNote(note);
+    if (steeringResolveRef.current) {
+      steeringResolveRef.current();
+      steeringResolveRef.current = null;
+    }
+  }, [setSteeringNote]);
+
+  const waitForSteeringDirection = useCallback(async (): Promise<string | null> => {
+    setRunPhase("steering");
+    await new Promise<void>((resolve) => {
+      let resolved = false;
+      const timer = setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          steeringResolveRef.current = null;
+          resolve();
+        }
+      }, 15_000);
+      const doResolve = () => {
+        if (!resolved) {
+          resolved = true;
+          clearTimeout(timer);
+          steeringResolveRef.current = null;
+          resolve();
+        }
+      };
+
+      steeringResolveRef.current = doResolve;
+
+      if (abortRef.current) doResolve();
+    });
+
+    const nextNote = sanitizeSteeringNote(steeringNoteRef.current);
+    setSteeringNote("");
+    if (!abortRef.current) setRunPhase("denoising");
+    return nextNote;
+  }, [setSteeringNote]);
+
   // ---------------------------------------------------------------------------
   // Main denoise generation with all agentic enhancements
   // ---------------------------------------------------------------------------
@@ -646,6 +713,7 @@ export function useGeneration({
       let critiqueNotes: string | null = null;
       let currentSteeringNote: string | null = null;
       let extraSharpenPasses = 0;
+      let pausedAfterStructure = false;
 
       for (let step = 1; step < denoiseSteps; step++) {
         if (abortRef.current) break;
@@ -684,9 +752,7 @@ export function useGeneration({
           stepIndex: step,
         }, { stream: useStreaming });
         stepResults.push(result);
-
-        // Clear streaming text after step completes
-        if (useStreaming) setStreamingText("");
+        if (!useStreaming) setStreamingText(result);
 
         // -----------------------------------------------------------------------
         // Enhancement 3: Critique after the structure step
@@ -702,43 +768,9 @@ export function useGeneration({
         // -----------------------------------------------------------------------
         // Enhancement 5: Steering pause after structure step
         // -----------------------------------------------------------------------
-        if (isStructureStep && !abortRef.current && !isFinalStep) {
-          // Pause to let the user optionally type a steering note
-          setRunPhase("steering");
-          await new Promise<void>((resolve) => {
-            let resolved = false;
-            const doResolve = () => {
-              if (!resolved) {
-                resolved = true;
-                clearTimeout(timer);
-                steeringResolveRef.current = null;
-                resolve();
-              }
-            };
-
-            steeringResolveRef.current = doResolve;
-
-            // Auto-resume after 15 seconds if the user doesn't interact
-            const timer = setTimeout(doResolve, 15_000);
-
-            // Also resolve if aborted
-            if (abortRef.current) doResolve();
-          });
-
-          // Capture the steering note the user typed during the pause.
-          // Sanitize: limit length and strip common prompt-injection patterns.
-          const rawNote = steeringNote.trim();
-          if (rawNote) {
-            const sanitized = rawNote
-              .slice(0, 200)
-              .replace(/ignore (all )?(previous|prior|above) (instructions?|prompts?|rules?)/gi, "")
-              .replace(/system\s*:/gi, "")
-              .trim();
-            currentSteeringNote = sanitized || null;
-          } else {
-            currentSteeringNote = null;
-          }
-          if (!abortRef.current) setRunPhase("denoising");
+        if (isStructureStep && !abortRef.current && !isFinalStep && !pausedAfterStructure) {
+          pausedAfterStructure = true;
+          currentSteeringNote = await waitForSteeringDirection();
         }
 
         // -----------------------------------------------------------------------
@@ -776,6 +808,7 @@ export function useGeneration({
                 stepIndex: step,
               });
               stepResults[stepResults.length - 1] = fixResult;
+              setStreamingText(fixResult);
             }
           } catch {
             // Revision verification is best-effort
@@ -823,6 +856,7 @@ export function useGeneration({
                 stepIndex: step,
               });
               stepResults[stepResults.length - 1] = extraResult;
+              setStreamingText(extraResult);
             }
           } catch {
             // Quality gate is best-effort — don't fail generation
@@ -833,15 +867,21 @@ export function useGeneration({
       // -------------------------------------------------------------------------
       // Cleanup pass
       // -------------------------------------------------------------------------
+      let cleanupSteeringNote: string | null = null;
+      if (!abortRef.current && stepResults.length > 0) {
+        cleanupSteeringNote = await waitForSteeringDirection();
+      }
+
       if (!abortRef.current && stepResults.length > 0) {
         const cleanupPrompt = generateCleanupPrompt(
           stepResults[stepResults.length - 1],
-          lang
+          lang,
+          cleanupSteeringNote
         );
         const cleanedTrajectory = await callModel([cleanupPrompt], 0.8, 3000, {
           phase: "cleanup",
           stepIndex: denoiseSteps,
-        });
+        }, { stream: true });
         stepResults[stepResults.length - 1] = cleanedTrajectory;
         setTrajectories([cleanedTrajectory]);
         setAllStepOutputs([stepResults]);
@@ -892,6 +932,7 @@ export function useGeneration({
     lastQualityScore,
     steeringNote,
     setSteeringNote,
+    chooseSteeringDirection,
     resumeFromSteering,
     scanNoiseFragments,
     generate,

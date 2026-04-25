@@ -163,6 +163,13 @@ const EMPTY_CURATION_ANSWERS: CurationAnswers = {
   rejectedFuture: "",
 };
 
+const STEERING_DIRECTION_KEYS = [
+  "deeper",
+  "darker",
+  "sharper",
+  "concrete",
+] as const;
+
 const WHY_THESE_OPTIONS: LocalizedChoice[] = [
   {
     value: "They feel like my best life",
@@ -1090,6 +1097,49 @@ export default function Home() {
                 >
                   {t("steering_hint")}
                 </p>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(96px, 1fr))",
+                    gap: 8,
+                    marginBottom: 12,
+                  }}
+                >
+                  {STEERING_DIRECTION_KEYS.map((key) => (
+                    <button
+                      key={key}
+                      onClick={() =>
+                        gen.chooseSteeringDirection(t(`steering_${key}_note`))
+                      }
+                      style={{
+                        ...buttonStyles.secondary,
+                        marginTop: 0,
+                        minHeight: 38,
+                        padding: "9px 8px",
+                        color: theme.moss78,
+                        border: `1px solid ${theme.mossBorder16}`,
+                        background: theme.mossBg06,
+                        letterSpacing: 0.4,
+                        lineHeight: 1.2,
+                      }}
+                    >
+                      {t(`steering_${key}`)}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => gen.chooseSteeringDirection("")}
+                    style={{
+                      ...buttonStyles.secondary,
+                      marginTop: 0,
+                      minHeight: 38,
+                      padding: "9px 8px",
+                      letterSpacing: 0.4,
+                      lineHeight: 1.2,
+                    }}
+                  >
+                    {t("steering_keep")}
+                  </button>
+                </div>
                 <input
                   type="text"
                   value={gen.steeringNote}

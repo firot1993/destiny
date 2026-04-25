@@ -140,6 +140,19 @@ const translations: Record<string, Record<string, string>> = {
     steering_resume: "Continue",
     steering_skip: "Skip",
     steering_countdown: "Auto-continuing in",
+    steering_deeper: "Deeper",
+    steering_darker: "Darker",
+    steering_sharper: "Sharper",
+    steering_concrete: "More concrete",
+    steering_keep: "Keep going",
+    steering_deeper_note:
+      "Make the next version psychologically deeper without explaining the psychology.",
+    steering_darker_note:
+      "Make the next version darker, stranger, and more consequential.",
+    steering_sharper_note:
+      "Make the next version sharper, tighter, and less decorative.",
+    steering_concrete_note:
+      "Make the next version more concrete, with more scenes, objects, and social facts.",
 
     // Quality gate (Enhancement 1)
     quality_score_label: "Draft quality",
@@ -272,6 +285,15 @@ const translations: Record<string, Record<string, string>> = {
     steering_resume: "继续",
     steering_skip: "跳过",
     steering_countdown: "自动继续倒计时",
+    steering_deeper: "更深",
+    steering_darker: "更暗",
+    steering_sharper: "更锐利",
+    steering_concrete: "更具体",
+    steering_keep: "继续生成",
+    steering_deeper_note: "让下一版在心理层面更深，但不要直接解释心理。",
+    steering_darker_note: "让下一版更暗、更奇异，也让后果更明显。",
+    steering_sharper_note: "让下一版更锐利、更紧凑，减少装饰性句子。",
+    steering_concrete_note: "让下一版更具体，多用场景、物件和社会事实承载含义。",
 
     // Quality gate
     quality_score_label: "草稿质量",

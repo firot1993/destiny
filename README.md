@@ -21,6 +21,7 @@ The current product is not a literal diffusion model. It is a prompt chain that 
 └──────────────┬───────────┘      └──────────────┬───────────────┘
                │                                  │
                │                                  ├─ OpenRouter
+               │                                  ├─ DeepSeek
                │                                  ├─ xAI
                │                                  ├─ Anthropic
                │                                  └─ Google Gemini
@@ -36,7 +37,7 @@ The current product is not a literal diffusion model. It is a prompt chain that 
 
 Provider responses are normalized to Anthropic-style text blocks before returning to the client. Optional rate limiting uses Upstash Redis for per-IP throttling plus a global daily cap, and the UI caches the daily quota snapshot in `localStorage`.
 
-The in-app provider picker currently ships with OpenRouter and xAI presets from `lib/constants.ts`. The route adapter also contains direct Anthropic and Gemini support if the request body uses those providers.
+The in-app provider picker currently ships with OpenRouter, DeepSeek, and xAI presets from `lib/constants.ts`. The route adapter also contains direct Anthropic and Gemini support if the request body uses those providers.
 
 When Supabase is configured, the app also records anonymous session telemetry, LLM calls, curated bullets, final stories, and story ratings for later analysis and dataset building. When it is not configured, telemetry calls are silent no-ops.
 
@@ -54,6 +55,7 @@ Open `http://localhost:3000`.
 
 ```bash
 OPENROUTER_API_KEY=        # required for the default provider path
+DEEPSEEK_API_KEY=          # optional, enables DeepSeek models in the UI
 XAI_API_KEY=               # optional, enables xAI models in the UI
 ANTHROPIC_API_KEY=         # optional, supported by the route adapter
 GOOGLE_API_KEY=            # optional, supported by the route adapter
@@ -79,6 +81,12 @@ npm run start
 npm run lint
 npm test
 npm run test:watch
+npm run eval:prompts
+npm run eval:prompts:validate
+npm run eval:live
+npm run eval:live:validate
+npm run redteam:generate
+npm run redteam:run
 
 npm run db:start
 npm run db:reset
@@ -141,7 +149,41 @@ docs/superpowers/   Skill-generated specs/plans from prior sessions
 
 - **Retry with backoff** — Every upstream LLM call retries up to 2 times with exponential backoff on 429/5xx errors.
 - **Fallback providers** — `NEXT_PUBLIC_FALLBACK_PROVIDERS` (comma-separated) defines a fallback chain tried when the primary provider fails with a retryable error.
-- **Streaming** — The final story step streams via SSE for OpenRouter and xAI, showing words as they arrive. Falls back to non-streaming for unsupported providers.
+- **Streaming** — The final story step streams via SSE for OpenRouter, DeepSeek, and xAI, showing words as they arrive. Falls back to non-streaming for unsupported providers.
+
+## Prompt Evaluations
+
+Prompt contract evals live in `promptfooconfig.yaml` and use a deterministic custom provider at `evals/promptfoo/destinyPromptProvider.ts`. The provider renders the real prompt builders from `lib/prompts.ts`, so the suite can check scan, critique, sharpen, final, cleanup, quality gate, revision verification, and diversity-check prompt contracts without calling an LLM or requiring provider API keys.
+
+```bash
+npm run eval:prompts:validate
+npm run eval:prompts
+```
+
+These deterministic prompt checks run in GitHub Actions before the production build, so prompt changes cannot quietly break the expected prompt contracts.
+
+Live output-quality evals live in `promptfoo.live.yaml`. They compare OpenRouter, DeepSeek, and xAI on the same small golden dataset in `evals/golden/finalStoryScenarios.json`, then score the final story with `evals/promptfoo/assertFinalStoryQuality.cjs` for paragraph shape, length, motif carry-through, questionnaire leakage, and generic self-help language.
+
+```bash
+npm run eval:live:validate
+npm run eval:live
+```
+
+`npm run eval:live` loads `.env.local`, calls real provider APIs, and expects `OPENROUTER_API_KEY`, `DEEPSEEK_API_KEY`, and `XAI_API_KEY` to be set for the full matrix. Use Promptfoo's `--filter-providers` flag after `--` if you only want one provider.
+
+If a configured model is unavailable in your account or region, set `PROMPTFOO_OPENROUTER_MODEL`, `PROMPTFOO_DEEPSEEK_MODEL`, or `PROMPTFOO_XAI_MODEL` in `.env.local`. `PROMPTFOO_LIVE_TIMEOUT_MS` caps each live provider call so a slow upstream cannot hang the eval indefinitely.
+
+Red-team config lives in `promptfoo.redteam.yaml` and targets `/api/generate` through `evals/promptfoo/apiGenerateTarget.ts`. It covers prompt override/injection, prompt extraction, hijacking, excessive agency, harmful content, and PII probes.
+
+```bash
+npm run dev
+npm run redteam:generate
+npm run redteam:run
+```
+
+The red-team run expects a reachable target at `PROMPTFOO_TARGET_BASE_URL` (default `http://127.0.0.1:3000`) plus the target provider key/model. Promptfoo may also need an attacker/grader provider such as OpenAI for generated adversarial probes.
+
+The npm scripts keep Promptfoo's local eval database in ignored `.promptfoo/` and disable telemetry/update checks for repeatable local and CI runs.
 
 ## Persistence And Telemetry
 
