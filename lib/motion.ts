@@ -1,6 +1,6 @@
 export const motion = {
-  bulletDurationSec: 6.5,
-  ricochetDurationSec: 8.0,
+  bulletDurationSec: 8.0,
+  ricochetDurationSec: 9.5,
   // Sequential spawn: next bullet enters this many seconds after the previous
   bulletSpawnIntervalSec: 2.2,
   bulletBobDurationSec: 2.2,   // independent bob cycle (CSS keyframe)
@@ -55,8 +55,8 @@ export const motion = {
 } as const;
 
 export const kineticType = {
-  bulletMinPx: 24,
-  bulletMaxPx: 40,
+  bulletMinPx: 36,
+  bulletMaxPx: 64,
   bulletWeight: 800,
   bulletLetterSpacing: "-0.01em",
   impactPx: 128,

@@ -137,7 +137,7 @@ describe("Promptfoo live final-story provider", () => {
 
     expect(firstBody.model).toBe("deepseek-v4-pro");
     expect(firstBody.messages[0].content).toContain("MOTIFS");
-    expect(secondBody.messages[0].content).toContain("Read this trajectory");
+    expect(secondBody.messages[0].content).toContain("Read this story");
   });
 
   it("allows env model overrides without editing the Promptfoo config", async () => {

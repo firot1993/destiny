@@ -16,18 +16,13 @@ import { Big5Form } from "@/components/Big5Form";
 import { WorkflowRail } from "@/components/WorkflowRail";
 import { StepIndicator } from "@/components/StepIndicator";
 import { TrajectoryCard } from "@/components/TrajectoryCard";
-import { BulletField } from "@/components/BulletField";
-import { AmmoHUD } from "@/components/AmmoHUD";
-import { FireImpact } from "@/components/FireImpact";
 import { StoryRating } from "@/components/StoryRating";
 import { getOrCreateSessionUuid } from "@/lib/sessionId";
 import { buildFieldsFromAnswers, randomizeQuestionnaireAnswers } from "@/lib/questionnaire";
 import { buildStoryConditioning } from "@/lib/prompts";
-import { PROVIDERS, DEFAULT_PROVIDER } from "@/lib/constants";
+import { PROVIDERS, DEFAULT_PROVIDER, STORY_STYLES, DEFAULT_STORY_STYLE, STORY_STYLE_STORAGE_KEY, type StoryStyle } from "@/lib/constants";
 import { theme, mono, labelStyles } from "@/lib/theme";
-import { previewBullets } from "@/lib/devPreview";
 import type { CurationAnswers, QuestionnaireAnswers } from "@/types";
-import { REVOLVER_CHAMBERS } from "@/types";
 
 const IS_DEV = process.env.NODE_ENV === "development";
 
@@ -253,11 +248,21 @@ export default function Home() {
   const [denoiseSteps, setDenoiseSteps] = useState(4);
   const [provider, setProvider] = useState(DEFAULT_PROVIDER);
   const [model, setModel] = useState(PROVIDERS[DEFAULT_PROVIDER][0]);
-  const [fireImpactActive, setFireImpactActive] = useState(false);
+  const [storyStyle, setStoryStyle] = useState<StoryStyle>(DEFAULT_STORY_STYLE);
   const [sessionUuid, setSessionUuid] = useState<string>("");
   const [enableGeminiSearch, setEnableGeminiSearch] = useState(false);
   useEffect(() => {
     setSessionUuid(getOrCreateSessionUuid());
+    if (typeof window !== "undefined") {
+      const saved = window.localStorage.getItem(STORY_STYLE_STORAGE_KEY) as StoryStyle | null;
+      if (saved && STORY_STYLES.some((s) => s.id === saved)) setStoryStyle(saved);
+    }
+  }, []);
+  const handleSetStoryStyle = useCallback((next: StoryStyle) => {
+    setStoryStyle(next);
+    if (typeof window !== "undefined") {
+      try { window.localStorage.setItem(STORY_STYLE_STORAGE_KEY, next); } catch {}
+    }
   }, []);
   const fields = useMemo(() => buildFieldsFromAnswers(questionnaireAnswers), [questionnaireAnswers]);
   const conditioning = useMemo(
@@ -281,19 +286,11 @@ export default function Home() {
     t,
     sessionUuid,
     enableGeminiSearch,
+    storyStyle,
   });
 
-  const handleFire = useCallback(() => {
-    setFireImpactActive(true);
-  }, []);
-
-  const handleFireImpactComplete = useCallback(() => {
-    setFireImpactActive(false);
+  const handleContinue = useCallback(() => {
     gen.generate();
-  }, [gen]);
-
-  const handlePassComplete = useCallback((bulletId: number) => {
-    gen.ricochetSingle(bulletId);
   }, [gen]);
 
   const resetCuration = useCallback(() => {
@@ -311,11 +308,8 @@ export default function Home() {
   }, [gen, resetCuration]);
 
   const caughtCount = gen.bullets.filter((b) => b.status === "caught").length;
-  const activeBulletsCount = gen.bullets.filter(
-    (b) => b.status === "flying" || b.status === "ricocheting"
-  ).length;
   const showCurationQuestions =
-    caughtCount > 0 && (gen.runPhase === "ready" || activeBulletsCount === 0);
+    caughtCount > 0 && gen.runPhase === "ready";
   const curationReady =
     curationAnswers.whyThese.length > 0 &&
     curationAnswers.rejectedFuture.length > 0;
@@ -324,10 +318,6 @@ export default function Home() {
     "",
     ...Array.from({ length: 10 }, (_, i) => t(`guidance_${i + 1}`)),
   ], [t]);
-  const kineticFontFamily =
-    lang === "zh"
-      ? "var(--serif-zh)"
-      : "var(--display)";
 
   return (
     <div data-lang={lang} className="page-shell">
@@ -489,6 +479,39 @@ export default function Home() {
                 }}
               >
                 {t("gemini_search_hint")}
+              </div>
+            </div>
+
+            {/* Story style picker */}
+            <div style={{ marginTop: 20 }}>
+              <label style={labelStyle}>{t("story_style_label")}</label>
+              <div style={{ display: "grid", gap: 8 }}>
+                {STORY_STYLES.map((s) => {
+                  const active = storyStyle === s.id;
+                  return (
+                    <button
+                      key={s.id}
+                      onClick={() => handleSetStoryStyle(s.id)}
+                      style={{
+                        width: "100%",
+                        padding: "12px 14px",
+                        textAlign: "left",
+                        background: active ? theme.mossBg09 : "rgba(255,250,240,0.44)",
+                        border: `1px solid ${active ? theme.mossBorder24 : theme.inkBorder07}`,
+                        borderRadius: 8,
+                        cursor: "pointer",
+                        color: active ? theme.moss : theme.ink5,
+                      }}
+                    >
+                      <div style={{ fontSize: 11, ...mono, letterSpacing: 1, textTransform: "uppercase" }}>
+                        {t(s.labelKey)}
+                      </div>
+                      <div style={{ marginTop: 4, fontSize: 11, ...mono, color: theme.ink3, lineHeight: 1.5 }}>
+                        {t(s.blurbKey)}
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -747,70 +770,75 @@ export default function Home() {
             )}
 
             {(gen.runPhase === "reviewing" || gen.runPhase === "ready") && (
-              <div className="bullet-stage" style={{ marginBottom: 24 }}>
-                <AmmoHUD
-                  bullets={gen.bullets}
-                  loadedLabel={t("ammo_loaded_label")}
-                />
-                <BulletField
-                  bullets={gen.bullets}
-                  onCatch={gen.catchBullet}
-                  onPassComplete={handlePassComplete}
-                  fontFamily={kineticFontFamily}
-                />
-                {activeBulletsCount === 0 && !gen.isGenerating && (
+              <div style={{ marginBottom: 24 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    marginBottom: 14,
+                  }}
+                >
+                  <div style={sectionLabelStyle}>{t("latent_scan_label")}</div>
                   <div
                     style={{
-                      position: "absolute",
-                      inset: 0,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      padding: 24,
-                      pointerEvents: "none",
+                      ...mono,
+                      fontSize: 11,
+                      fontWeight: 700,
+                      letterSpacing: 0.6,
+                      color: caughtCount > 0 ? theme.moss78 : theme.ink38,
                     }}
                   >
-                    <div
-                      style={{
-                        maxWidth: 420,
-                        padding: "16px 18px",
-                        background: "rgba(255,250,240,0.92)",
-                        border: `1px solid ${theme.inkBorder08}`,
-                        borderRadius: 8,
-                        boxShadow: "0 12px 32px rgba(0,0,0,0.08)",
-                        textAlign: "center",
-                      }}
-                    >
-                      <div
-                        style={{
-                          ...mono,
-                          fontSize: 10,
-                          fontWeight: 700,
-                          letterSpacing: 0.9,
-                          color: theme.moss78,
-                          marginBottom: 8,
-                        }}
-                      >
-                        {caughtCount > 0
-                          ? t("bullet_round_ready_title")
-                          : t("bullet_round_empty_title")}
-                      </div>
-                      <p
-                        className="serif"
-                        style={{
-                          margin: 0,
-                          fontSize: 15,
-                          lineHeight: 1.65,
-                          color: theme.ink75,
-                        }}
-                      >
-                        {caughtCount > 0
-                          ? t("bullet_round_ready_body")
-                          : t("bullet_round_empty_body")}
-                      </p>
-                    </div>
+                    {caughtCount} {t("ammo_loaded_label")}
                   </div>
-                )}
+                </div>
+                <div style={{ display: "grid", gap: 10 }}>
+                  {gen.bullets.map((bullet) => {
+                    const picked = bullet.status === "caught";
+                    return (
+                      <button
+                        key={bullet.id}
+                        onClick={() => gen.catchBullet(bullet.id)}
+                        style={{
+                          width: "100%",
+                          padding: "14px 16px",
+                          textAlign: "left",
+                          borderRadius: 8,
+                          border: `1px solid ${picked ? theme.mossBorder24 : theme.inkBorder08}`,
+                          background: picked ? theme.mossBg09 : "rgba(255,250,240,0.44)",
+                          color: picked ? theme.moss78 : theme.ink72,
+                          cursor: "pointer",
+                          fontSize: 14,
+                          lineHeight: 1.6,
+                          transition: "all 0.2s ease",
+                        }}
+                      >
+                        <span
+                          style={{
+                            display: "inline-block",
+                            width: 20,
+                            height: 20,
+                            borderRadius: 4,
+                            border: `1.5px solid ${picked ? theme.moss : theme.ink3}`,
+                            background: picked ? theme.moss : "transparent",
+                            marginRight: 12,
+                            verticalAlign: "middle",
+                            position: "relative",
+                            top: -1,
+                            textAlign: "center",
+                            lineHeight: "18px",
+                            fontSize: 12,
+                            color: theme.paper,
+                            fontWeight: 700,
+                          }}
+                        >
+                          {picked ? "✓" : ""}
+                        </span>
+                        {bullet.text}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             )}
 
@@ -904,13 +932,6 @@ export default function Home() {
               </div>
             )}
 
-            <FireImpact
-              active={fireImpactActive}
-              onComplete={handleFireImpactComplete}
-              label={t("bullet_fire")}
-              fontFamily={kineticFontFamily}
-            />
-
             {gen.bullets.length === 0 && !gen.isGenerating && (
               <button
                 onClick={handleScan}
@@ -920,21 +941,6 @@ export default function Home() {
                   <Play size={13} strokeWidth={2} aria-hidden="true" />
                   {t("btn_scan_noise")}
                 </span>
-              </button>
-            )}
-
-            {IS_DEV && gen.bullets.length === 0 && !gen.isGenerating && (
-              <button
-                onClick={() => gen.previewAnimation(previewBullets())}
-                style={{
-                  ...buttonStyles.secondary,
-                  marginTop: 8,
-                  fontSize: 10,
-                  opacity: 0.6,
-                  letterSpacing: 1,
-                }}
-              >
-                ⚡ preview animation
               </button>
             )}
 
@@ -955,19 +961,19 @@ export default function Home() {
                   </div>
                 )}
                 <button
-                  onClick={handleFire}
-                  disabled={gen.isGenerating || fireImpactActive || !curationReady}
+                  onClick={handleContinue}
+                  disabled={gen.isGenerating || !curationReady}
                   style={{
-                    ...buttonStyles.fire,
+                    ...buttonStyles.primary,
                     opacity:
-                      gen.isGenerating || fireImpactActive || !curationReady
+                      gen.isGenerating || !curationReady
                         ? 0.5
                         : 1,
                   }}
                 >
                   <span className="icon-text">
                     <Play size={13} strokeWidth={2} aria-hidden="true" />
-                    [ {t("bullet_fire")} ]
+                    {t("bullet_fire")}
                   </span>
                 </button>
               </>
@@ -990,8 +996,7 @@ export default function Home() {
             )}
 
             {IS_DEV &&
-              (gen.runPhase === "reviewing" || gen.runPhase === "ready") &&
-              caughtCount < REVOLVER_CHAMBERS && (
+              (gen.runPhase === "reviewing" || gen.runPhase === "ready") && (
                 <button
                   onClick={gen.catchAll}
                   disabled={gen.isGenerating}
@@ -1000,7 +1005,7 @@ export default function Home() {
                     opacity: gen.isGenerating ? 0.5 : 1,
                   }}
                 >
-                  <span className="icon-text">[ dev: catch all ]</span>
+                  <span className="icon-text">[ dev: select all ]</span>
                 </button>
               )}
 
