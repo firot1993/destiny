@@ -20,7 +20,7 @@ describe("promptfoo Destiny prompt provider", () => {
       },
     });
 
-    expect(result.output).toContain("Generate exactly 10 raw future fragments.");
+    expect(result.output).toContain("Generate exactly 10 cryptic future shards");
     expect(result.output).toContain("WORLD STATE:");
     expect(result.output).toContain("Format exactly:");
     expect(result.output).not.toMatch(/Big Five|openness|conscientiousness/i);

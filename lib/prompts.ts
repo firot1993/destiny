@@ -4,7 +4,7 @@ import type {
   Message,
   StoryConditioning,
 } from "@/types";
-import { NOISE_SCAN_COUNT } from "@/lib/constants";
+import { NOISE_SCAN_COUNT, type StoryStyle } from "@/lib/constants";
 
 const LANG_NAMES: Record<string, string> = {
   en: "English",
@@ -688,9 +688,35 @@ function guidanceDescription(guidance: number): string {
 }
 
 function guidanceTone(guidance: number): string {
-  if (guidance >= 7) return "high-energy, vivid, sharp, but never slogan-like";
-  if (guidance >= 4) return "grounded, tense, quietly magnetic";
-  return "small, intimate, understated, lightly uncanny";
+  if (guidance >= 7) return "high-voltage, cinematic, willing to be lurid; mystery over clarity";
+  if (guidance >= 4) return "grounded but charged, with at least one image you can't quite finish";
+  return "small, intimate, lightly uncanny; mystery over clarity";
+}
+
+// ---------------------------------------------------------------------------
+// Style modes (final-pass voice picker). Auto preserves prior signature-author
+// behavior; the others REPLACE the signature-author block with a mode block.
+// ---------------------------------------------------------------------------
+
+const STYLE_BLOCKS: Record<Exclude<StoryStyle, "auto">, string> = {
+  cinematic: `Write like a scene from a contemporary film. Visual, kinetic, score-able. Wide shots and close-ups. Dialogue allowed in fragments. Cuts in time are clean — don't narrate transitions, just land in the next moment. Think image first, sentence second.`,
+  tabloid: `Write in second person. Direct address. "You" wake up, "you" answer the call, "you" know what you did. Headline-energy openings. Compress like a viral magazine piece — confessional, intimate, slightly accusing. The reader should feel implicated.`,
+  mythic: `Write as if telling a folktale set five minutes from now. Heightened weather, named objects, omens that don't quite resolve. No literal magic, but the world is charged. Sentences carry the cadence of something half-remembered. Use repetition sparingly, like a refrain.`,
+  noir: `Write with stakes, money, and consequences. Sharp short sentences next to one long one. Late nights, owed favors, rooms with too few exits. Someone is owed something by the end. No villains, but choices cost. Carry the moral weight of a crime story without the crime.`,
+  documentary: `Write as if narrated for a quiet documentary voiceover. Calm, observational, unhurried. Specific times of day. Real verbs, no decoration. The narrator likes this person but does not pretend to understand them. Let silence and small gestures carry the meaning.`,
+};
+
+function buildStyleBlock(
+  styleMode: StoryStyle | undefined,
+  signatureAuthor: string | null | undefined
+): string {
+  if (styleMode && styleMode !== "auto") {
+    return `\nVOICE:\n${STYLE_BLOCKS[styleMode]}\n`;
+  }
+  if (signatureAuthor) {
+    return `\nSIGNATURE STYLE:\nWrite in the voice of ${signatureAuthor}. Carry their sentence rhythm, attention, and register. Do not name the author, quote their work, or imitate specific stories.\n`;
+  }
+  return "";
 }
 
 function formatConditioning(conditioning: StoryConditioning): string {
@@ -727,16 +753,20 @@ function formatConditioning(conditioning: StoryConditioning): string {
   return lines.join("\n");
 }
 
+// Only the truly off-limits jargon — the dramatic register words (tension,
+// pressure, pivot, momentum, trajectory) are now allowed because they help
+// the story land.
 const BANNED_VOCAB =
-  "momentum, trajectory, pattern, chapter, identity, tension, pressure, resilience, alignment, pivot, inflection, compounding";
+  "resilience, alignment, compounding, journey, growth mindset, authentic self, true north, lean in, level up, unlock potential";
 
-const SHARED_RULES = `- Use concrete nouns. Brand names, street names, specific objects, exact sums, weekday names. Avoid abstractions.
-- Let some sentences be flat, ordinary, or even boring. Not every line needs to carry weight.
-- Mix registers. A plain sentence next to a strange one is better than six literary sentences in a row.
-- Leave things unexplained. Not every image needs to pay off. Not every choice needs a reason.
+const SHARED_RULES = `- The questionnaire is mood, not biography. Invent jobs, cities, names, relationships, weather, strangers freely. Honor only the age band, the rough chapter (now / unstable / pull / motion), and the temperament. Everything else is yours.
+- Use concrete nouns. Brand names, street names, specific objects, exact sums, weekday names. Real places preferred over invented ones.
+- Earn the reader's screenshot. At least one sentence per paragraph should land sharp enough that a stranger would want to quote it.
+- Drama is allowed — earned drama, not melodrama. Big swings, reversals, public moments, private collapses, money on the table, doors closing.
+- Open scenes mid-action. Skip the setup; trust the reader to catch up.
 - Let contradictions stand. The person can be two things at once.
-- Do not name personality dimensions or psychological labels.
-- The profile must remain invisible; a reader should not be able to reverse-engineer the questionnaire.
+- Leave things unexplained. Not every image needs to pay off. Not every choice needs a reason.
+- Do not name personality dimensions or psychological labels. No self-help language. No therapist phrasing.
 - Avoid these words: ${BANNED_VOCAB}.`;
 
 export function buildStoryConditioning(
@@ -815,12 +845,14 @@ DRAFT:
 ${draft}
 
 Judge along these axes:
-- Does any sentence read like a personality profile, self-help line, or questionnaire paraphrase?
-- Is the tone uniformly literary, or does register vary (plain, offhand, even banal sentences mixed with charged ones)?
+- Is the opening a hook (a line of dialogue, an action, an image) or just place-setting? Flag if it's place-setting.
+- Does each paragraph have at least one quotable, screenshot-worthy sentence? Flag any paragraph that doesn't.
+- Does any sentence read like a personality test, self-help line, or therapist phrasing? (Note: questionnaire echo is fine if it's vivid — we're flagging psychology-jargon, not biographical fidelity.)
+- Are stakes real? Does anything cost the character anything?
+- Is the tone uniform, or does register vary (a plain offhand sentence next to a charged one)?
 - Are there unexplained images left to breathe, or is everything tied into meaning?
-- Do the motifs appear as concrete actions and objects, or as described themes?
-- Is there at least one unexpected detail, contradiction, or thing that resists easy reading?
 - Does the story cause itself forward, or is it a list of parallel events?
+- Does it end on an image, or does it end on a lesson? (Lessons are bad.)
 
 Output 3-5 short, concrete revision notes. Each note should name a specific problem and a specific fix. No general praise, no restating the draft. If a note can only be phrased abstractly, drop it.
 
@@ -843,7 +875,8 @@ export function generateStepPrompt(
   orderedBullets?: string[],
   critiqueNotes?: string | null,
   signatureAuthor?: string | null,
-  steeringNote?: string | null
+  steeringNote?: string | null,
+  styleMode?: StoryStyle
 ): Message {
   const langInstruction =
     lang !== "en"
@@ -855,9 +888,13 @@ export function generateStepPrompt(
     "Only infer broad contemporary pressures and opportunities. Do not mention named events, headlines, or specific public figures.";
 
   if (step === 0) {
+    const fragmentLengthLine =
+      lang === "zh"
+        ? "- be 2–6 Chinese characters; occasionally a short trailing clause that breaks off mid-thought"
+        : "- be 1–3 words; occasionally a 4-word fragment that trails off (em-dash or ellipsis allowed)";
     return {
       role: "user",
-      content: `You are scanning the earliest unresolved signals of a person's future trajectory.
+      content: `You are catching the earliest unresolved signals of a person's future — cryptic shards, not sentences.
 
 ${context}
 
@@ -867,25 +904,30 @@ ${worldState}
 GUIDANCE SCALE: ${guidance}/10 (${guidanceDescription(guidance)})
 
 TASK:
-Generate exactly ${NOISE_SCAN_COUNT} raw future fragments.
+Generate exactly ${NOISE_SCAN_COUNT} cryptic future shards. These are omens, not predictions. Noun clusters, fragments, half-images, unfinished clauses. The kind of phrase you'd write on a wall and not explain.
 
-These are not predictions, not advice, not summaries, and not slogans.
-They are unresolved fragments from possible futures: scenes, tensions, environments, losses, habits, freedoms, systems, and recognitions that might later become a life.
+Each shard must:
+${fragmentLengthLine}
+- be impossible to finish in one reading — an image, a noun, an unfinished clause, never a full sentence with subject and verb
+- carry weight without explaining itself
+- avoid advice, morals, slogans, and personality language
+- avoid quote-like polish; avoid resolved phrases like "finding your purpose" or "the courage to begin"
 
-Each fragment must:
-- be 4-12 words
-- stand alone
-- feel emotionally charged but unfinished
-- suggest a future shape without explaining it
-- avoid personality trait labels and questionnaire language
-- avoid complete moral conclusions or polished "quote-like" phrasing
+Good examples (English):
+- “borrowed coat”
+- “Tuesday again”
+- “the wrong city”
+- “your name on a door”
+- “a phone you don’t answer”
+- “money waits”
+- “the year everyone left for—”
 
-Distribution requirements:
-- at least 2 fragments should hint at work / money / systems
-- at least 2 should hint at relationships / social position / visibility
-- at least 2 should hint at place / movement / environment
-- at least 2 should hint at inner cost / freedom / loss / desire
-- the remaining 2 can be strange, symbolic, or contradictory
+Bad examples (do NOT do this):
+- “You will find your purpose at thirty-two” (full sentence, advice)
+- “embrace your authentic self” (slogan, banned vocab)
+- “a person who learns from failure” (personality description)
+
+Spread the ${NOISE_SCAN_COUNT} shards loosely across material things, people, places, and inner weather. At least two should resist categorization — strange, symbolic, or contradictory.
 
 Tone:
 ${guidanceTone(guidance)}
@@ -896,14 +938,14 @@ Format exactly:
 ...
 ${NOISE_SCAN_COUNT}::...
 
-Respond with only the ${NOISE_SCAN_COUNT} fragments.${langInstruction}`,
+Respond with only the ${NOISE_SCAN_COUNT} shards.${langInstruction}`,
     };
   }
 
   if (step === totalSteps - 1) {
     const hasStructuredBullets = orderedBullets && orderedBullets.length >= 6;
     const bulletBlock = hasStructuredBullets
-      ? `\nMOTIFS (in the order they should anchor the story):
+      ? `\nMOTIFS (cryptic shards — use them as imagery seeds; you may bend or recombine them, you do not need to quote them):
 - Paragraph 1 anchor: "${orderedBullets[0]}"
 - Paragraph 2 anchors: "${orderedBullets[1]}", "${orderedBullets[2]}"
 - Paragraph 3 anchors: "${orderedBullets[3]}", "${orderedBullets[4]}"
@@ -911,32 +953,30 @@ Respond with only the ${NOISE_SCAN_COUNT} fragments.${langInstruction}`,
 `
       : "";
     const structureLine = hasStructuredBullets
-      ? `Each paragraph grows outward from its anchor motif(s) above. The motifs should appear as concrete images or actions inside the paragraph — not quoted, not explained. The motif is a seed; the paragraph is what it becomes.`
-      : `The paragraphs do not need to follow a rigid arc. Think of them as four different vantage points onto the same life.`;
-    const signatureBlock = signatureAuthor
-      ? `\nSIGNATURE STYLE:
-Write in the voice of ${signatureAuthor}. Carry their sentence rhythm, attention, and register. Do not name the author, quote their work, or imitate specific stories.
-`
-      : "";
+      ? `Each paragraph grows out of its anchor shard(s) above. Treat shards as seeds — they can show up as a concrete image, an action, a place, or just a mood. Do not quote them. Do not explain them.`
+      : `The paragraphs do not need a rigid arc. Think of them as four scenes from the same life, in the same year or across years.`;
+    const styleBlock = buildStyleBlock(styleMode, signatureAuthor);
 
     return {
       role: "user",
-      content: `You are finalizing a possible trajectory.
+      content: `You are writing a short, dramatic story about one possible future — the kind a reader would screenshot and forward to a friend.
 
 ${context}
-${bulletBlock}${signatureBlock}
+${bulletBlock}${styleBlock}
 PREVIOUS DRAFT:
 ${prev}
 
 TASK:
-Write a longer story about this person's future life: exactly 4 paragraphs, separated by blank lines, roughly 400-600 words total. Each paragraph should be 4-8 sentences. Do NOT label or number the paragraphs — just write them.
+Write a short story about this person's future life: exactly 4 paragraphs, separated by blank lines, roughly 400–600 words total. Each paragraph 4–8 sentences. Do NOT label or number the paragraphs.
 
-${structureLine} Move through time freely — years can pass in a clause, or a single afternoon can fill a paragraph. Open inside a specific scene, not a summary. Something should have shifted by the end, but not in a way that resolves into a lesson.
+${structureLine} Move through time freely — a year can pass in a clause, a single afternoon can fill a paragraph. Open mid-scene with a hook — a line of dialogue, an action, an image — not a summary or a place-setting. Something has shifted by the end. End on an image, not a lesson.
+
+One line in the story should land like the title of a song someone would tattoo. Don't make it the last line.
 
 Rules:
 ${SHARED_RULES}
 
-Respond with only the final trajectory.${langInstruction}`,
+Respond with only the final story.${langInstruction}`,
     };
   }
 
@@ -1001,24 +1041,26 @@ export function generateCleanupPrompt(
 
   return {
     role: "user",
-    content: `Read this trajectory and rewrite any sentence that sounds like it came from a personality test, self-help book, or career questionnaire.
+    content: `Read this story and rewrite any sentence that sounds like it came from a personality test, self-help book, or therapist's notebook. Keep dramatic phrasing intact — you are scrubbing jargon, not energy.
 ${steeringBlock}
 
-TRAJECTORY:
+STORY:
 ${trajectory}
 
 Rewrite any sentence that:
 - Names a personality dimension (e.g. "novelty appetite", "risk tolerance", "openness")
-- Describes a behavioral pattern in abstract terms (e.g. "compounding begins when...")
 - Reads like a thesis statement about who the person is
 - Uses any of these words: ${BANNED_VOCAB}
 - Could appear on a motivational poster or LinkedIn bio
+- Explains a feeling instead of showing it
 
-Replace each such sentence with a concrete scene, image, consequence, or social fact that carries the same meaning.
+Replace each such sentence with a concrete scene, image, line of dialogue, or social fact that carries the same charge.
 
-Also check the texture: if every sentence carries the same literary weight, break the pattern. Add one plain, offhand, or mundane sentence. Leave at least one image unexplained. Keep chronology and the existing motifs intact — do not add new themes. Preserve the paragraph structure (4 paragraphs separated by blank lines) and do not shorten the piece; the revised version should be at least as long as the original.${steeringNote ? " Also honor the user direction above." : ""}
+Do NOT scrub: dramatic phrasing, sharp openings, quotable lines, big swings, second-person address (if the story uses it), or any sentence that earns its weight through specificity. The goal is a story a reader would forward to a friend, not a tame one.
 
-Respond with only the revised trajectory.${langInstruction}`,
+Keep chronology and the existing motifs intact. Preserve the paragraph structure (4 paragraphs separated by blank lines) and do not shorten the piece; the revised version should be at least as long as the original.${steeringNote ? " Also honor the user direction above." : ""}
+
+Respond with only the revised story.${langInstruction}`,
   };
 }
 
@@ -1099,10 +1141,12 @@ ${draft}
 
 Score the draft on a scale from 1-10 across these dimensions, then output a single overall score:
 - Concreteness: Does the draft use specific nouns, places, objects instead of abstractions?
+- Shareability: Would a reader screenshot a sentence from this and send it to a friend? Is there at least one quotable line per paragraph?
+- Hook: Does it open mid-scene, or does it warm up with place-setting?
+- Stakes: Do choices cost the character something? Is there real consequence?
 - Texture: Is there variation in register (plain sentences mixed with charged ones)?
-- Questionnaire invisibility: Would a reader be unable to reverse-engineer the questionnaire?
-- Narrative causality: Does the story cause itself forward rather than listing parallel events?
-- Emotional charge: Does it feel alive, unfinished, and real?
+- Voice integrity: No therapist phrasing, no self-help slogans, no personality-test language.
+- Ending: Does it end on an image rather than a lesson?
 
 Output ONLY a single line in this exact format:
 SCORE: <number 1-10>
@@ -1184,20 +1228,22 @@ export function generateDiversityCheckPrompt(
   const numbered = fragments.map((f, i) => `${i + 1}:: ${f}`).join("\n");
   return {
     role: "user",
-    content: `You are checking a set of story fragments for thematic diversity.
+    content: `You are checking a set of cryptic future shards for thematic diversity.
 
-FRAGMENTS:
+SHARDS:
 ${numbered}
 
-Check for near-duplicate or thematically overlapping fragments. Two fragments overlap if they express essentially the same future scenario, emotion, or image with only minor wording differences.
+Check for near-duplicate or thematically overlapping shards. Two shards overlap if they express essentially the same image or scenario with only minor wording differences (e.g. "the wrong city" and "a wrong town").
 
-If ALL fragments are sufficiently distinct, respond with exactly:
+IMPORTANT: Shards are meant to be very short (1–3 words or short trailing fragments). Do NOT flag a shard as a duplicate just because it is short or terse. Brevity is the point.
+
+If ALL shards are sufficiently distinct, respond with exactly:
 DIVERSE_OK
 
-If some fragments are too similar, list the indices that should be REPLACED (keep the stronger one from each pair), in this format:
+If some shards are too similar, list the indices that should be REPLACED (keep the stronger one from each pair), in this format:
 REPLACE: 3, 7, 9
 
-Only flag true near-duplicates. Fragments that share a broad theme (e.g., both mention work) but express different scenes or tensions are NOT duplicates.${langInstruction}`,
+Only flag true near-duplicates. Shards that share a broad theme (e.g. both gesture at money) but evoke different images are NOT duplicates.${langInstruction}`,
   };
 }
 

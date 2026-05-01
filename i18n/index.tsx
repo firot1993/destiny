@@ -59,12 +59,12 @@ const translations: Record<string, Record<string, string>> = {
     guidance_label: "Ambition",
     steps_label: "Detail",
     workflow_scan: "Generate",
-    workflow_curate: "Catch",
+    workflow_curate: "Pick",
     workflow_denoise: "Build",
     latent_scan_label: "Story Ideas",
     noise_title: "Story Ideas",
     scan_empty:
-      "Click Generate to scan 10 story fragments. Catch bullets as they fly by — load six, then fire.",
+      "Click Generate to scan 10 story signals. Pick the ones that resonate, then continue.",
     guidance_1: "quiet life",
     guidance_2: "steady path",
     guidance_3: "solid",
@@ -112,19 +112,19 @@ const translations: Record<string, Record<string, string>> = {
 
     // Revolver curate
     bullet_reload: "RELOAD",
-    bullet_fire: "FIRE",
-    ammo_loaded_label: "LOADED",
-    curate_stage_hint: "Catch the bullets. Load six. Fire.",
-    bullet_round_empty_title: "ROUND EMPTY",
-    bullet_round_empty_body: "Everything slipped past. Reload for a fresh scan.",
-    bullet_round_ready_title: "CHAMBER LIVE",
-    bullet_round_ready_body: "You can fire what you caught, or reload for another pass.",
-    curation_title: "After The Catch",
+    bullet_fire: "CONTINUE",
+    ammo_loaded_label: "PICKED",
+    curate_stage_hint: "Pick the signals that resonate.",
+    signal_pick_none_title: "NO SIGNALS PICKED",
+    signal_pick_none_body: "Pick at least one signal to continue, or reload for a fresh scan.",
+    signal_pick_ready_title: "READY",
+    signal_pick_ready_body: "Continue with your picks, or reload for another pass.",
+    curation_title: "About Your Picks",
     curation_hint:
-      "Let the bullets control imagery. Use these two answers to tell the story why they matter and what kind of future you're refusing.",
+      "Use these two answers to tell the story why these signals matter and what kind of future you're refusing.",
     curation_why_title: "What made you keep these?",
     curation_reject_title: "Which kind of future did you reject?",
-    curation_needed: "Choose what made these fragments stick and what kind of future you refused before firing.",
+    curation_needed: "Choose what made these signals stick and what kind of future you refused before continuing.",
 
     // Story rating
     rate_prompt: "Did this story land for you?",
@@ -163,6 +163,21 @@ const translations: Record<string, Record<string, string>> = {
     // Web search grounding (Enhancement 7)
     gemini_search_label: "Web search grounding",
     gemini_search_hint: "Use Google Search to ground story fragments in real-world context (Gemini only)",
+
+    // Story style picker
+    story_style_label: "Story style",
+    style_auto_label: "Auto",
+    style_auto_blurb: "Voice picked from your age and answers — the original behavior.",
+    style_cinematic_label: "Cinematic",
+    style_cinematic_blurb: "A scene from a contemporary film. Visual, kinetic, scoreable.",
+    style_tabloid_label: "Tabloid You",
+    style_tabloid_blurb: "Second person. Direct, confessional, slightly accusing. Viral magazine energy.",
+    style_mythic_label: "Mythic",
+    style_mythic_blurb: "A folktale set five minutes from now. Weather, omens, named objects.",
+    style_noir_label: "Noir",
+    style_noir_blurb: "Stakes and consequences. Sharp sentences. Someone is owed something.",
+    style_documentary_label: "Documentary",
+    style_documentary_blurb: "A quiet voiceover. Calm, observational, unhurried. Real verbs.",
   },
 
   zh: {
@@ -208,12 +223,12 @@ const translations: Record<string, Record<string, string>> = {
     guidance_label: "野心程度",
     steps_label: "细节程度",
     workflow_scan: "生成",
-    workflow_curate: "捕捉",
+    workflow_curate: "挑选",
     workflow_denoise: "构建",
     latent_scan_label: "故事灵感",
     noise_title: "故事灵感",
     scan_empty:
-      "点击生成，扫描 10 条故事碎片。子弹飞过时抓住它们——装满六发，然后开火。",
+      "点击生成，扫描 10 条故事信号。选择你有共鸣的，然后继续。",
     guidance_1: "平淡一生",
     guidance_2: "稳健之路",
     guidance_3: "踏实",
@@ -257,20 +272,20 @@ const translations: Record<string, Record<string, string>> = {
 
     settings: "设置",
 
-    bullet_reload: "重新装填",
-    bullet_fire: "开火",
-    ammo_loaded_label: "已装填",
-    curate_stage_hint: "抓住子弹。装满六发。开火。",
-    bullet_round_empty_title: "本轮落空",
-    bullet_round_empty_body: "这一轮都溜走了。重新装填，再扫一轮。",
-    bullet_round_ready_title: "弹仓仍可开火",
-    bullet_round_ready_body: "你可以用已捕获的内容直接开火，或重新装填再来一轮。",
-    curation_title: "捕获之后",
+    bullet_reload: "重新生成",
+    bullet_fire: "继续",
+    ammo_loaded_label: "已选",
+    curate_stage_hint: "选择你有共鸣的信号。",
+    signal_pick_none_title: "未选择信号",
+    signal_pick_none_body: "至少选择一条信号才能继续，或重新生成。",
+    signal_pick_ready_title: "准备就绪",
+    signal_pick_ready_body: "继续使用已选信号，或重新生成。",
+    curation_title: "关于你的选择",
     curation_hint:
-      "让子弹决定故事表面的意象，再用这两个回答告诉系统：它们为什么重要，以及你拒绝成为什么样的人。",
+      "用这两个回答告诉系统：这些信号为什么重要，以及你拒绝成为什么样的人。",
     curation_why_title: "你为什么留下这些？",
     curation_reject_title: "你拒绝的是哪一种未来？",
-    curation_needed: "开火之前，先选出这些碎片为什么留下，以及你拒绝的是哪种未来。",
+    curation_needed: "继续之前，先选出这些信号为什么留下，以及你拒绝的是哪种未来。",
 
     rate_prompt: "这个故事打动你了吗？",
     rate_like: "打动了",
@@ -304,6 +319,21 @@ const translations: Record<string, Record<string, string>> = {
     // Web search grounding
     gemini_search_label: "网络搜索增强",
     gemini_search_hint: "使用 Google 搜索将故事碎片与真实世界背景结合（仅限 Gemini）",
+
+    // Story style picker
+    story_style_label: "故事风格",
+    style_auto_label: "自动",
+    style_auto_blurb: "根据你的年龄与回答选择声音——原始行为。",
+    style_cinematic_label: "电影感",
+    style_cinematic_blurb: "一场当代电影里的戏。画面、动感、可配乐。",
+    style_tabloid_label: "小报 · 你",
+    style_tabloid_blurb: "第二人称。直接、吐露、带点责备。像一篇会被转发的杂志文。",
+    style_mythic_label: "神话感",
+    style_mythic_blurb: "设在五分钟后的民间传说。天气、预兆、被命名的物件。",
+    style_noir_label: "黑色",
+    style_noir_blurb: "有赌注、有代价。句子锐利。总有人被欠了什么。",
+    style_documentary_label: "纪录片",
+    style_documentary_blurb: "安静的旁白。冷静、观察、不急。只用真动词。",
   },
 };
 

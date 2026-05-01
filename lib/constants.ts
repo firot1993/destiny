@@ -54,3 +54,35 @@ export const MAX_EXTRA_SHARPEN_PASSES = 2;
 
 /** Whether Gemini web-search grounding is enabled by default. */
 export const GEMINI_SEARCH_GROUNDING_DEFAULT = false;
+
+// ---------------------------------------------------------------------------
+// Story style modes (final-pass voice picker)
+// ---------------------------------------------------------------------------
+
+export type StoryStyle =
+  | "auto"
+  | "cinematic"
+  | "tabloid"
+  | "mythic"
+  | "noir"
+  | "documentary";
+
+export interface StoryStyleDef {
+  id: StoryStyle;
+  /** i18n key for the label shown in the picker */
+  labelKey: string;
+  /** i18n key for the short blurb below the label */
+  blurbKey: string;
+}
+
+export const STORY_STYLES: StoryStyleDef[] = [
+  { id: "auto",        labelKey: "style_auto_label",        blurbKey: "style_auto_blurb" },
+  { id: "cinematic",   labelKey: "style_cinematic_label",   blurbKey: "style_cinematic_blurb" },
+  { id: "tabloid",     labelKey: "style_tabloid_label",     blurbKey: "style_tabloid_blurb" },
+  { id: "mythic",      labelKey: "style_mythic_label",      blurbKey: "style_mythic_blurb" },
+  { id: "noir",        labelKey: "style_noir_label",        blurbKey: "style_noir_blurb" },
+  { id: "documentary", labelKey: "style_documentary_label", blurbKey: "style_documentary_blurb" },
+];
+
+export const DEFAULT_STORY_STYLE: StoryStyle = "auto";
+export const STORY_STYLE_STORAGE_KEY = "destiny-story-style";

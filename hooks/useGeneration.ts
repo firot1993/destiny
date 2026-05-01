@@ -10,11 +10,8 @@ import type {
   RunPhase,
   WorkflowStage,
 } from "@/types";
-import { REVOLVER_CHAMBERS } from "@/types";
 import {
   fragmentToBullet,
-  catchBullet as catchBulletHelper,
-  ricochetBullet,
   buildBulletSeed,
 } from "@/lib/revolver";
 import {
@@ -38,6 +35,8 @@ import {
   API_ROUTE,
   QUALITY_GATE_THRESHOLD,
   MAX_EXTRA_SHARPEN_PASSES,
+  DEFAULT_STORY_STYLE,
+  type StoryStyle,
 } from "@/lib/constants";
 import { BIG5_KEYS } from "@/lib/constants";
 
@@ -159,6 +158,7 @@ export interface UseGenerationParams {
   t: (key: string) => string;
   sessionUuid?: string;
   enableGeminiSearch?: boolean;
+  storyStyle?: StoryStyle;
 }
 
 export interface UseGenerationReturn {
@@ -207,6 +207,7 @@ export function useGeneration({
   t,
   sessionUuid,
   enableGeminiSearch,
+  storyStyle = DEFAULT_STORY_STYLE,
 }: UseGenerationParams): UseGenerationReturn {
   const [isGenerating, setIsGenerating] = useState(false);
   const [runPhase, setRunPhase] = useState<RunPhase>("idle");
@@ -249,10 +250,7 @@ export function useGeneration({
   useEffect(() => {
     if (runPhase !== "reviewing" && runPhase !== "ready") return;
 
-    if (
-      caughtCount >= REVOLVER_CHAMBERS ||
-      (caughtCount > 0 && activeBulletsCount === 0)
-    ) {
+    if (caughtCount > 0) {
       if (runPhase !== "ready") {
         setRunPhase("ready");
       }
@@ -262,7 +260,7 @@ export function useGeneration({
     if (runPhase === "ready") {
       setRunPhase("reviewing");
     }
-  }, [activeBulletsCount, caughtCount, runPhase]);
+  }, [caughtCount, runPhase]);
 
   const setSteeringNote = useCallback((note: string) => {
     steeringNoteRef.current = note;
@@ -565,32 +563,45 @@ export function useGeneration({
   const catchBulletAction = (bulletId: number) => {
     if (isGenerating) return;
     setBullets((prev) => {
-      const next = catchBulletHelper(prev, bulletId);
-      const caught = next.filter((b) => b.status === "caught").length;
-      if (caught >= REVOLVER_CHAMBERS) {
-        setRunPhase("ready");
+      // Toggle: if already caught, uncatch it
+      const target = prev.find((b) => b.id === bulletId);
+      if (!target) return prev;
+      if (target.status === "caught") {
+        // Deselect — reset to flying
+        const next = prev.map((b) =>
+          b.id === bulletId
+            ? { ...b, status: "flying" as const, chamberIndex: null }
+            : b
+        );
+        // Reindex chamber indices for remaining caught bullets
+        let idx = 0;
+        return next.map((b) =>
+          b.status === "caught" ? { ...b, chamberIndex: idx++ } : b
+        );
       }
-      return next;
+      // Select
+      const caughtSoFar = prev.filter((b) => b.status === "caught").length;
+      return prev.map((b) =>
+        b.id === bulletId
+          ? { ...b, status: "caught" as const, chamberIndex: caughtSoFar }
+          : b
+      );
     });
   };
 
-  const ricochetSingle = (bulletId: number) => {
-    setBullets((prev) =>
-      prev.map((b) => (b.id === bulletId ? ricochetBullet(b) : b))
-    );
+  const ricochetSingle = (_bulletId: number) => {
+    // No-op: ricochet mechanic removed in signal-picker simplification
   };
 
   const ricochetUncaught = () => {
-    setBullets((prev) => prev.map(ricochetBullet));
+    // No-op: ricochet mechanic removed in signal-picker simplification
   };
 
   const catchAll = () => {
     if (isGenerating) return;
     setBullets((prev) => {
       let chamber = prev.filter((b) => b.status === "caught").length;
-      if (chamber >= REVOLVER_CHAMBERS) return prev;
-      const next = prev.map((b) => {
-        if (chamber >= REVOLVER_CHAMBERS) return b;
+      return prev.map((b) => {
         if (b.status === "flying" || b.status === "ricocheting") {
           const caught = { ...b, status: "caught" as const, chamberIndex: chamber };
           chamber += 1;
@@ -598,8 +609,6 @@ export function useGeneration({
         }
         return b;
       });
-      if (chamber >= REVOLVER_CHAMBERS) setRunPhase("ready");
-      return next;
     });
   };
 
@@ -734,7 +743,8 @@ export function useGeneration({
           orderedBulletTexts,
           critiqueNotes,
           signatureStyle.author,
-          currentSteeringNote
+          currentSteeringNote,
+          storyStyle
         );
 
         const stepMaxTokens = isFinalStep ? 3000 : isSharpenStep ? 1800 : 1000;
@@ -801,7 +811,8 @@ export function useGeneration({
                 orderedBulletTexts,
                 verifyResult.unresolvedNotes,
                 signatureStyle.author,
-                currentSteeringNote
+                currentSteeringNote,
+                storyStyle
               );
               const fixResult = await callModel([fixMsg], 1.0, 1800, {
                 phase: "sharpen",
@@ -849,7 +860,8 @@ export function useGeneration({
                 orderedBulletTexts,
                 null,
                 signatureStyle.author,
-                currentSteeringNote
+                currentSteeringNote,
+                storyStyle
               );
               const extraResult = await callModel([extraMsg], 1.1, 1800, {
                 phase: "sharpen",
